@@ -1,0 +1,434 @@
+ipv6: false
+http_port: 3080
+socks_port: 3090
+allow_external_connections: false
+vif_only: true
+block_quic: true
+hide_vpn_icon: false
+hijack_dns:
+- '*:53'
+geoip_db_url: https://github.com/xream/geoip/releases/latest/download/ipinfo.country.mmdb
+asn_db_url: https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-ASN.mmdb
+proxy_latency_test_url: http://www.gstatic.com/generate_204
+direct_latency_test_url: http://connectivitycheck.platform.hicloud.com/generate_204
+compat_route: true
+dns:
+  bootstrap:
+  - system
+  upstreams:
+    System:
+    - system
+    China_DNS:
+    - 223.5.5.5
+    - 119.29.29.29
+    - 114.114.114.114
+    - 192.18.0.2
+    Global_DNS:
+    - https://cloudflare-dns.com/dns-query
+    - https://dns.alidns.com/dns-query
+    - https://1.1.1.1/dns-query
+    Tencent_DNS:
+    - https://doh.pub/dns-query
+    - 119.29.29.29
+  forward:
+  - wildcard:
+      match: '*.local'
+      value: System
+  - wildcard:
+      match: '*.lan'
+      value: System
+  - proxy_rule_set:
+      match: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/WeChat/WeChat.list
+      value: Tencent_DNS
+      disabled: false
+  - proxy_rule_set:
+      match: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/ChinaMax/ChinaMax_Domain.list
+      value: China_DNS
+  - wildcard:
+      match: '*'
+      value: Global_DNS
+  hosts:
+    iosapps.itunes.apple.com:
+    - iosapps.itunes.apple.com.download.ks-cdn.com
+  public_ip_lookup_url: https://ifconfig.me/ip
+proxies:
+- vless:
+    name: NTT isp
+    server: usisp.217777.xyz
+    port: 22804
+    user_id: 04cd5125-6df6-431e-c3c4-7a74ca1318dc
+    tfo: false
+    udp_relay: true
+    flow: xtls-rprx-vision
+    transport:
+      tls:
+        sni: cdn.bizibly.com
+        reality:
+          public_key: dDc1imhcVNeJHE__SXJGFvb86sOye8tnbC-LRDXzBTU
+          short_id: a4e957
+        skip_tls_verify: false
+    prev_hop: 日本节点
+policy_groups:
+- external:
+    name: Subscribe
+    type: select
+    urls:
+    - 订阅链接1
+    - 订阅链接2
+    - 订阅链接3
+    icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Static.png
+    hidden: true
+- select:
+    name: PROXY
+    policies:
+    - NTT isp
+    - 自动选择
+    - 低倍率节点
+    - 香港节点
+    - 台湾节点
+    - 日本节点
+    - 新加坡节点
+    - 美国节点
+    - 其他节点
+    flatten: false
+    icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Final.png
+    hidden: false
+- auto_test:
+    name: 自动选择
+    policies:
+    - Subscribe
+    flatten: true
+    tolerance: 100
+    icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Auto.png
+- select:
+    name: 手动选择
+    policies:
+    - Subscribe
+    flatten: true
+    icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Rocket.png
+    hidden: false
+- auto_test:
+    name: 低倍率节点
+    policies:
+    - Subscribe
+    flatten: true
+    filter: \d+\.\d+
+    icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Direct.png
+    hidden: true
+- fallback:
+    name: 美国家宽isp
+    policies:
+    - Subscribe
+    flatten: true
+    filter: ^(?=.*家宽)(?=.*(美国|美國|\bUS\b|USA|United\s?States)).*
+    icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Back.png
+    hidden: false
+- select:
+    name: Emby
+    policies:
+    - DIRECT
+    - 低倍率节点
+    flatten: false
+    icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Emby.png
+    hidden: false
+- auto_test:
+    name: 香港节点
+    policies:
+    - Subscribe
+    flatten: true
+    filter: ^(?=.*((?i)🇭🇰|香港|(\b(HK|Hong)\b)))(?!.*((?i)回国|校园|游戏|(\b(GAME)\b))).*$
+    icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Hong_Kong.png
+    hidden: false
+- auto_test:
+    name: 台湾节点
+    policies:
+    - Subscribe
+    flatten: true
+    filter: ^(?=.*((?i)🇹🇼|台湾|(\b(TW|Tai|Taiwan)\b)))(?!.*((?i)回国|校园|游戏|(\b(GAME)\b))).*$
+    icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Taiwan.png
+    hidden: false
+- auto_test:
+    name: 日本节点
+    policies:
+    - Subscribe
+    flatten: true
+    filter: ^(?=.*((?i)🇯🇵|日本|(\b(JP|Japan)\b)))(?!.*((?i)回国|校园|游戏|(\b(GAME)\b))).*$
+    icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Japan.png
+    hidden: false
+- auto_test:
+    name: 新加坡节点
+    policies:
+    - Subscribe
+    flatten: true
+    filter: ^(?=.*((?i)🇸🇬|新加坡|狮|(\b(SG|Singapore)\b)))(?!.*((?i)回国|校园|游戏|(\b(GAME)\b))).*$
+    icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Singapore.png
+    hidden: false
+- auto_test:
+    name: 美国节点
+    policies:
+    - Subscribe
+    flatten: true
+    filter: ^(?=.*((?i)🇺🇸|美国|(\b(US|United States)\b)))(?!.*((?i)回国|校园|游戏|(\b(GAME)\b))).*$
+    icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/United_States.png
+    hidden: false
+- select:
+    name: 其他节点
+    policies:
+    - Subscribe
+    flatten: true
+    filter: ^((?!香港|HK|Hong|🇭🇰|台湾|TW|Taiwan|Tai|🇹🇼|日本|JP|Japan|🇯🇵|新加坡|狮城|SG|Singapore|🇸🇬|美国|US|United States|America|🇺🇸).)*$
+    icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/World_Map.png
+- select:
+    name: AI服务
+    policies:
+    - 美国家宽isp
+    - 美国节点
+    - 新加坡节点
+    - PROXY
+    flatten: false
+    icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Bot.png
+    hidden: false
+- select:
+    name: YouTube
+    policies:
+    - PROXY
+    - 香港节点
+    - 日本节点
+    - 美国节点
+    - 其他节点
+    icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/YouTube.png
+- select:
+    name: Telegram
+    policies:
+    - PROXY
+    - 香港节点
+    - 新加坡节点
+    - 美国节点
+    - 其他节点
+    icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Telegram.png
+- select:
+    name: Twitter
+    policies:
+    - PROXY
+    - 香港节点
+    - 日本节点
+    - 美国节点
+    - 其他节点
+    icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Twitter.png
+- select:
+    name: Apple
+    policies:
+    - DIRECT
+    - PROXY
+    - 美国节点
+    icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Apple.png
+- select:
+    name: Google
+    policies:
+    - PROXY
+    - 香港节点
+    - 日本节点
+    - 美国节点
+    icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Google_Search.png
+- select:
+    name: Microsoft
+    policies:
+    - DIRECT
+    - PROXY
+    - 香港节点
+    icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Microsoft.png
+- select:
+    name: 国际服务
+    policies:
+    - NTT isp
+    - 美国节点
+    - 台湾节点
+    - 香港节点
+    - PROXY
+    - DIRECT
+    flatten: false
+    icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Global.png
+    hidden: false
+- select:
+    name: 国内服务
+    policies:
+    - DIRECT
+    - PROXY
+    icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/China_Map.png
+- select:
+    name: 广告拦截
+    policies:
+    - REJECT
+    - DIRECT
+    icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Advertising.png
+rules:
+- domain_suffix:
+    match: 91porny.com
+    policy: 台湾节点
+    disabled: false
+- ip_cidr:
+    name: Emby
+    match: 82.115.30.103/32
+    policy: Emby
+    no_resolve: false
+    disabled: false
+- rule_set:
+    match: LAN
+    policy: DIRECT
+- rule_set:
+    name: PCDN
+    match: https://ruleset.skk.moe/Clash/non_ip/reject-no-drop.txt
+    policy: REJECT-DROP
+    disabled: false
+- rule_set:
+    match: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/Privacy/Privacy.list
+    policy: 广告拦截
+- rule_set:
+    name: Sukka Ad
+    match: https://ruleset.skk.moe/List/domainset/reject.conf
+    policy: 广告拦截
+    disabled: false
+- rule_set:
+    match: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/Advertising/Advertising.list
+    policy: 广告拦截
+    disabled: true
+- rule_set:
+    match: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/Hijacking/Hijacking.list
+    policy: 广告拦截
+- rule_set:
+    match: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/WeChat/WeChat.list
+    policy: 国内服务
+- rule_set:
+    name: 国内Direct
+    match: https://ruleset.skk.moe/List/non_ip/direct.conf
+    policy: 国内服务
+    disabled: false
+- rule_set:
+    name: 国内常见域名
+    match: https://ruleset.skk.moe/List/non_ip/domestic.conf
+    policy: 国内服务
+    disabled: false
+- rule_set:
+    name: 可莉国内域名
+    match: https://rule.kelee.one/Loon/ChinaMax.lsr
+    policy: 国内服务
+    disabled: false
+- rule_set:
+    match: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/OpenAI/OpenAI.list
+    policy: AI服务
+- rule_set:
+    match: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/Claude/Claude.list
+    policy: AI服务
+- rule_set:
+    match: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/Copilot/Copilot.list
+    policy: AI服务
+- rule_set:
+    match: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/Gemini/Gemini.list
+    policy: AI服务
+- rule_set:
+    name: Ai合集
+    match: https://github.com/fmz200/wool_scripts/raw/main/Loon/rule/AI.list
+    policy: AI服务
+    disabled: false
+- rule_set:
+    match: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/YouTube/YouTube.list
+    policy: YouTube
+- rule_set:
+    match: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/Telegram/Telegram.list
+    policy: Telegram
+- rule_set:
+    match: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/Twitter/Twitter.list
+    policy: Twitter
+- rule_set:
+    match: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/Apple/Apple.list
+    policy: Apple
+- rule_set:
+    match: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/Google/Google.list
+    policy: Google
+- rule_set:
+    match: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/Microsoft/Microsoft.list
+    policy: Microsoft
+- rule_set:
+    match: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/GitHub/GitHub.list
+    policy: PROXY
+- rule_set:
+    name: 国际常见域名
+    match: https://ruleset.skk.moe/List/non_ip/global.conf
+    policy: 国际服务
+- rule_set:
+    name: 代理域名补充
+    match: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/Proxy/Proxy.list
+    policy: 国际服务
+- rule_set:
+    name: 中国IP段
+    match: https://ruleset.skk.moe/List/ip/china_ip.conf
+    policy: 国内服务
+- geoip:
+    match: CN
+    policy: 国内服务
+- default:
+    policy: 国际服务
+mitm:
+  enabled: true
+  ca_p12:
+modules:
+- name: 丰巢去广告@可莉
+  url: https://script.hub/file/_start_/https://kelee.one/Tool/Loon/Lpx/FC_Box_remove_ads.lpx/_end_/FC_Box_remove_ads.sgmodule?type=loon-plugin&target=surge-module&del=true&jqEnabled=true&pm=.&sni=.
+  enabled: true
+- name: 酷安去广告@可莉
+  url: https://script.hub/file/_start_/https://kelee.one/Tool/Loon/Lpx/CoolApk_remove_ads.lpx/_end_/CoolApk_remove_ads.sgmodule?type=loon-plugin&target=surge-module&del=true&jqEnabled=true&pm=.&sni=.
+  enabled: true
+- url: http://script.hub/file/_start_/https://raw.githubusercontent.com/Likhixang/Egerny/refs/heads/main/sgmodule/IPPure.sgmodule/_end_/IPPure.sgmodule?type=surge-module&target=surge-module&del=true&jqEnabled=true
+  compat_arguments:
+    Proxy: PROXY
+  enabled: false
+- url: http://script.hub/file/_start_/https://raw.githubusercontent.com/ddgksf2013/Rewrite/master/AdBlock/XiaoHongShuAds.conf/_end_/XiaoHongShuAds.sgmodule?type=qx-rewrite&n=小红书去广告@ddgksf2013+应用净化&headers=User-Agent:surge&del=true&jqEnabled=true&target=surge-module
+  enabled: true
+- url: http://script.hub/file/_start_/https://raw.githubusercontent.com/Yuheng0101/X/refs/heads/main/Scripts/ChinaMobile/NoAds.js/_end_/NoAds.sgmodule?type=qx-rewrite&n=中国移动去广告@Yuheng+应用净化&headers=User-Agent:surge&del=true&jqEnabled=true&target=surge-module
+  enabled: true
+- url: http://script.hub/file/_start_/https://raw.githubusercontent.com/ddgksf2013/Rewrite/refs/heads/master/AdBlock/GoofishAds.conf/_end_/GoofishAds.sgmodule?type=qx-rewrite&n=闲鱼去广告@ddgksf2013+应用净化&headers=User-Agent:surge&del=true&jqEnabled=true&target=surge-module
+  enabled: true
+- url: http://script.hub/file/_start_/https://raw.githubusercontent.com/ddgksf2013/Scripts/master/coolapk.js/_end_/coolapk.sgmodule?type=qx-rewrite&n=酷安去广告@ddgksf2013+应用净化&headers=User-Agent:surge&del=true&jqEnabled=true&target=surge-module
+  enabled: false
+- url: http://script.hub/file/_start_/https://raw.githubusercontent.com/ddgksf2013/Rewrite/master/AdBlock/AmapAds.conf/_end_/AmapAds.sgmodule?type=qx-rewrite&n=高德地图去广告@ddgksf2013+应用净化&headers=User-Agent:surge&del=true&jqEnabled=true&target=surge-module
+  enabled: true
+- url: https://github.com/Maasea/sgmodule/raw/master/YouTube.Enhance.sgmodule
+  enabled: true
+- url: http://script.hub/file/_start_/https://raw.githubusercontent.com/ddgksf2013/Rewrite/master/AdBlock/YoutubeAds.conf/_end_/YoutubeAds.sgmodule?type=qx-rewrite&n=Youtube去广告@Maasea+视频自动PIP，背景播放&headers=User-Agent:surge&del=true&jqEnabled=true&target=surge-module
+  enabled: true
+- url: http://script.hub/file/_start_/https://raw.githubusercontent.com/fmz200/wool_scripts/refs/heads/main/Surge/module/weibo.module/_end_/weibo.sgmodule?type=surge-module&target=surge-module&del=true&jqEnabled=true
+  enabled: true
+- url: http://script.hub/file/_start_/https://raw.githubusercontent.com/NobyDa/Script/refs/heads/master/Surge/Module/GoogleCAPTCHA.sgmodule/_end_/GoogleCAPTCHA.sgmodule?type=surge-module&target=surge-module&del=true&jqEnabled=true
+  compat_arguments:
+    脚本引擎: .+
+  enabled: true
+- url: http://script.hub/file/_start_/https://raw.githubusercontent.com/zirawell/R-Store/refs/heads/main/Rule/Surge/Redirect/DivineEngine.sgmodule/_end_/DivineEngine.sgmodule?type=surge-module&target=surge-module&del=true&jqEnabled=true
+  enabled: true
+- url: https://github.com/BiliUniverse/ADBlock/releases/latest/download/BiliBili.ADBlock.sgmodule
+  enabled: true
+- url: https://github.com/BiliUniverse/Enhanced/releases/latest/download/BiliBili.Enhanced.sgmodule
+  enabled: true
+- url: https://github.com/NSRingo/WeatherKit/releases/latest/download/iRingo.WeatherKit.sgmodule
+  enabled: true
+- url: http://script.hub/file/_start_/https://limbopro.com/Adblock4limbo.sgmodule/_end_/Adblock4limbo.sgmodule?type=surge-module&target=surge-module&del=true&jqEnabled=true
+  enabled: true
+- url: http://script.hub/file/_start_/https://ddgksf2013.top/rewrite/StartUpAds.conf/_end_/StartUpAds.sgmodule?type=qx-rewrite&n=墨鱼去开屏2.0去广告@ddgksf2013+已抓包400余应用去开屏&headers=User-Agent:surge&del=true&jqEnabled=true&target=surge-module
+  enabled: true
+- url: http://script.hub/file/_start_/https://raw.githubusercontent.com/Tartarus2014/Loon-Script/refs/heads/master/Plugin/skip-proxy.lpx/_end_/skip-proxy.sgmodule?type=loon-plugin&target=surge-module&del=true&jqEnabled=true
+  enabled: true
+- url: https://raw.githubusercontent.com/QingRex/LoonKissSurge/refs/heads/main/Surge/Official/%E6%8B%A6%E6%88%AAHTTPDNS.official.sgmodule
+  enabled: true
+- url: https://ruleset.skk.moe/Modules/sukka_common_always_realip.sgmodule
+  enabled: true
+- url: https://raw.githubusercontent.com/QingRex/LoonKissSurge/refs/heads/main/Surge/Official/%E2%AD%90%EF%B8%8F%20BoxJs.official.sgmodule
+  enabled: true
+- url: https://raw.githubusercontent.com/QingRex/LoonKissSurge/refs/heads/main/Surge/Official/%E2%AD%90%EF%B8%8F%20Sub-Store.official.sgmodule
+  enabled: true
+- url: https://raw.githubusercontent.com/Script-Hub-Org/Script-Hub/refs/heads/main/modules/script-hub.beta.surge.sgmodule
+  enabled: true
+- url: https://raw.githubusercontent.com/obs1379/Egern/refs/heads/main/surge.qingr.moe_for_Egern.sgmodule
+  enabled: true
+- url: https://raw.githubusercontent.com/Likhixang/Egerny/main/sgmodule/ddgksf2Egern.sgmodule
+  enabled: true
+- url: https://raw.githubusercontent.com/Likhixang/Egerny/refs/heads/main/sgmodule/Kelee2Egern.sgmodule
+  enabled: true
