@@ -58,10 +58,10 @@ dns:
   public_ip_lookup_url: https://ifconfig.me/ip
 proxies:
 - vless:
-    name: NTT isp
-    server: usisp.217777.xyz
+    name: xxxxxxxxx
+    server: xxxxxxxxx
     port: 22804
-    user_id: 04cd5125-6df6-431e-c3c4-7a74ca1318dc
+    user_id: xxxxxxxxx
     tfo: false
     udp_relay: true
     flow: xtls-rprx-vision
@@ -69,7 +69,7 @@ proxies:
       tls:
         sni: cdn.bizibly.com
         reality:
-          public_key: dDc1imhcVNeJHE__SXJGFvb86sOye8tnbC-LRDXzBTU
+          public_key: 这里是密码
           short_id: a4e957
         skip_tls_verify: false
     prev_hop: 日本节点
