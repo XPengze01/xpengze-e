@@ -1,0 +1,154 @@
+
+name: fmz200 Xiaohongshu Update Watch
+
+on:
+  schedule:
+    # 每天北京时间 10:17
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: fmz200-xhs-watch
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check upstream updates
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const owner = "fmz200";
+            const repo = "wool_scripts";
+
+            const paths = [
+              "Surge/module/split/partX/Xiaohongshu.sgmodule",
+              "Scripts/xiaohongshu/xiaohongshu.js"
+            ];
+
+            // 获取上游文件的内容版本 SHA
+            const current = {};
+
+            for (const path of paths) {
+              const result = await github.rest.repos.getContent({
+                owner,
+                repo,
+                path,
+                ref: "main"
+              });
+
+              if (!result.data.sha) {
+                throw new Error(`无法获取版本: ${path}`);
+              }
+
+              current[path] = result.data.sha;
+            }
+
+            const stateTitle = "fmz200 小红书监控基线（自动维护）";
+
+            const stateBody = (data) => [
+              "自动维护的版本基线，请勿删除。",
+              "",
+              "首次运行只记录版本，后续变更创建提醒。",
+              "",
+              `<!-- fmz200-xhs-state: ${JSON.stringify(data)} -->`
+            ].join("\n");
+
+            // 读取此前保存的版本基线
+            const issues = await github.paginate(
+              github.rest.issues.listForRepo,
+              {
+                ...context.repo,
+                state: "all",
+                per_page: 100
+              }
+            );
+
+            const baseline = issues.find(
+              item => !item.pull_request &&
+                item.title === stateTitle
+            );
+
+            // 第一次运行只建立基线
+            if (!baseline) {
+              const created = await github.rest.issues.create({
+                ...context.repo,
+                title: stateTitle,
+                body: stateBody(current)
+              });
+
+              await github.rest.issues.update({
+                ...context.repo,
+                issue_number: created.data.number,
+                state: "closed"
+              });
+
+              core.info("首次运行：已建立监控基线");
+              return;
+            }
+
+            const match = (baseline.body || "").match(
+              /<!-- fmz200-xhs-state: (.+) -->/
+            );
+
+            if (!match) {
+              throw new Error("监控基线损坏，请检查状态 Issue");
+            }
+
+            const previous = JSON.parse(match[1]);
+
+            const changed = paths.filter(
+              path => current[path] !== previous[path]
+            );
+
+            if (changed.length === 0) {
+              core.info("上游文件无变化");
+              return;
+            }
+
+            // 仅在文件变化时创建提醒
+            const details = changed.map(path => {
+              const link = `https://github.com/${owner}/${repo}/blob/main/${path}`;
+              return [
+                `### ${path}`,
+                `- [查看上游文件](${link})`,
+                `- 旧版本: ${previous[path] || "未知"}`,
+                `- 新版本: ${current[path]}`
+              ].join("\n");
+            }).join("\n\n");
+
+            const body = [
+              "检测到 fmz200 小红书规则更新。",
+              "",
+              "请检查是否涉及以下功能：",
+              "- 开屏广告",
+              "- 首页信息流广告",
+              "- 评论区广告",
+              "- 图片、视频去水印",
+              "- 图片下载",
+              "",
+              details,
+              "",
+              "本任务不会自动修改 Egern 精简版。",
+              "请先核对上游变化，再决定是否合并。"
+            ].join("\n");
+
+            await github.rest.issues.create({
+              ...context.repo,
+              title: `【fmz200 更新】小红书规则发生变化 ${new Date().toISOString().slice(0,10)}`,
+              body
+            });
+
+            // 保存最新版本，避免每天重复通知
+            await github.rest.issues.update({
+              ...context.repo,
+              issue_number: baseline.number,
+              body: stateBody(current)
+            });
+
+            core.info(`发现 ${changed.length} 个文件变化`);
