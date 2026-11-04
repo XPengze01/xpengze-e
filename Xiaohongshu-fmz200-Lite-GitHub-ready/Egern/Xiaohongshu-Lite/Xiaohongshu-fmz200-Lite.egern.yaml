@@ -21,7 +21,7 @@ scriptings:
   - http_response:
       name: 小红书 fmz200 Lite
       match: '^https?://(edith|rec|www)\.(xiaohongshu|rnote)\.com/api/sns/(v\d+/(system_service/splash_config|homefeed|followfeed|note/(imagefeed|feed|videofeed|live_photo/save|video/save|comment/list|comment/sub_comments))|v1/interaction/comment/video/download)'
-      script_url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/Egern/Xiaohongshu-Lite/Xiaohongshu-fmz200-Lite.js
+      script_url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/Xiaohongshu-fmz200-Lite-GitHub-ready/Egern/Xiaohongshu-Lite/Xiaohongshu-fmz200-Lite.js
       timeout: 15
       body_required: true
       max_size: 3145728
