@@ -1,0 +1,37 @@
+name: 小红书 fmz200 Lite (Egern)
+description: 仅保留开屏、信息流/评论明确广告、图片视频去水印及图片下载；不修改搜索/购物/画质。
+author: based on fmz200; customized for Egern
+homepage: https://github.com/fmz200/wool_scripts
+
+rules:
+  - domain:
+      match: ads-img-qc.xhscdn.com
+      policy: REJECT
+  - domain:
+      match: ads-video-al.xhscdn.com
+      policy: REJECT
+  - domain:
+      match: ads-video-qc.xhscdn.com
+      policy: REJECT
+  - domain:
+      match: t-ads.xiaohongshu.com
+      policy: REJECT
+
+scriptings:
+  - http_response:
+      name: 小红书 fmz200 Lite
+      match: '^https?://(edith|rec|www)\.(xiaohongshu|rnote)\.com/api/sns/(v\d+/(system_service/splash_config|homefeed|followfeed|note/(imagefeed|feed|videofeed|live_photo/save|video/save|comment/list|comment/sub_comments))|v1/interaction/comment/video/download)'
+      script_url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/Egern/Xiaohongshu-Lite/Xiaohongshu-fmz200-Lite.js
+      timeout: 15
+      body_required: true
+      max_size: 3145728
+
+mitm:
+  hostnames:
+    includes:
+      - edith.xiaohongshu.com
+      - rec.xiaohongshu.com
+      - www.xiaohongshu.com
+      - edith.rnote.com
+      - rec.rnote.com
+      - www.rnote.com
