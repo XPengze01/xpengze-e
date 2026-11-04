@@ -7,8 +7,12 @@ homepage: https://github.com/ddgksf2013/Rewrite/blob/master/AdBlock/GoofishAds.c
 # 注意：广告标记不明确的卡片不删除，宁可漏拦也避免误删正常商品。
 
 url_rewrites:
-  # 开屏广告：仅拦截原作者已明确识别的 splash.ads 接口
-  - match: '^https?://(g-)?acs\.m\.goofish\.com/gw/mtop[^?]*splash\.ads'
+  # 开屏广告
+  - match: '^https?://(g-)?acs\.m\.goofish\.com/gw/mtop.*splash\.ads'
+    location: 'http://reject-200/'
+
+  # 开屏通用广告请求：补充墨鱼原版规则
+  - match: '^https?://(g-)?acs\.m\.goofish\.com/gw/mtop\.idle\.ad\.expose'
     location: 'http://reject-200/'
 
 body_rewrites:
