@@ -1,0 +1,29 @@
+name: 闲鱼去广告 Lite（最小干预）
+description: 仅处理开屏广告、首页明确标记的广告卡片、商品详情明确标记的广告卡片；不修改搜索、推荐、个人页、聊天、订单或支付。
+author: Custom adaptation based on ddgksf2013 GoofishAds
+homepage: https://github.com/ddgksf2013/Rewrite/blob/master/AdBlock/GoofishAds.conf
+
+# 规则依据：墨鱼 GoofishAds.conf 的 splash.ads / home.nextfresh / item.recommend。
+# 注意：广告标记不明确的卡片不删除，宁可漏拦也避免误删正常商品。
+
+url_rewrites:
+  # 开屏广告：仅拦截原作者已明确识别的 splash.ads 接口
+  - match: '^https?://(g-)?acs\.m\.goofish\.com/gw/mtop[^?]*splash\.ads'
+    location: 'http://reject-200/'
+
+body_rewrites:
+  # 首页信息流：仅删除具有明确 mamaAD 广告标记的项；保留正常推荐/商品/直播
+  - response_jq:
+      match: '^https?://(g-)?acs\.m\.goofish\.com/gw/mtop\.taobao\.idlehome\.home\.nextfresh(?:/|\?|$)'
+      filter: 'if (.data.sections | type) == "array" then .data.sections |= map(select((.data.bizType != "mamaAD") and (.cardData.bizType != "mamaAD"))) else . end'
+
+  # 商品详情底部推荐：仅删除 cardData.bizType == mamaAD 的广告卡片
+  - response_jq:
+      match: '^https?://(g-)?acs\.m\.goofish\.com/gw/mtop\.taobao\.idle\.item\.recommend(?:/|\?|$)'
+      filter: 'if (.data.cardList | type) == "array" then .data.cardList |= map(select(.cardData.bizType != "mamaAD")) else . end'
+
+mitm:
+  hostnames:
+    includes:
+      - acs.m.goofish.com
+      - g-acs.m.goofish.com
