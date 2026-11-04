@@ -1,0 +1,23 @@
+name: 东方财富开屏去广告 Lite
+description: 仅清理已知开屏广告位列表及其专用广告图片，不修改行情、资讯、账户或交易接口；基于 RuCu6 公开规则适配 Egern。
+author: Custom Egern adaptation based on RuCu6
+homepage: https://github.com/haixinn/loon/blob/main/dfcf.plugin
+
+# 基于 2024-11-18 公开规则；接口是否仍用于当前 App 版本，需要实际测试。
+# 仅删除已知广告字段，保留响应其他数据和错误信息。
+body_rewrites:
+  - response_jq:
+      match: '^https?://emdcadvertise(?:pj)?\.eastmoney\.com/infoService/v2(?:[/?]|$)'
+      filter: 'if (.data | type) == "object" and (.data.adpositionidlist | type) == "array" then .data.adpositionidlist = [] else . end'
+
+# 仅拦截东方财富已知广告图片目录，不封禁整个 CDN 域名。
+url_rewrites:
+  - match: '^https?://swdlcdn\.eastmoney\.com/app/adimg/'
+    location: 'http://reject-img/'
+
+mitm:
+  hostnames:
+    includes:
+      - emdcadvertise.eastmoney.com
+      - emdcadvertisepj.eastmoney.com
+      - swdlcdn.eastmoney.com
