@@ -1,6 +1,6 @@
-# 闲鱼 Lite V4：不拦截 HTTPDNS / AMDC / 支付、聊天及交易接口。
+# 闲鱼 Lite V4.1.1：补充 idlehome.home.firstdata 首屏接口，按明确广告标记过滤；不拦截 HTTPDNS / AMDC / 支付、聊天及交易接口。
 # 与其它闲鱼去广告模块同时启用可能互相覆盖，请只启用一套。
-name: 闲鱼去广告 Lite V4.1（无失效脚本）
+name: 闲鱼去广告 Lite V4.1.1（首页首屏补漏）
 description: 仅清除开屏广告池、首页与商品详情中明确标记的广告卡；不依赖已失效的远程 JS，不修改搜索、聊天、订单、支付或 HTTPDNS/AMDC。
 author: custom based on ddgksf2013, KeLee, skernelx, ShiinaWong
 homepage: https://github.com/XPengze01/xpengze-e
@@ -12,7 +12,7 @@ body_rewrites:
         .data |= (.adMap = {} | .cacheAdInfo = null | .realTimeAd = null)
       else . end
 - response_jq:
-    match: ^https?://(acs|g-acs|gw)\.m\.(goofish|taobao)\.com/(gw|h5)/mtop\.taobao\.(?:idlehome\.home\.(?:nextfresh|newitem\.page)|idle\.home\.(?:firstdata|nextfresh)|idle\.local\.home)(?:/|\?|$)
+    match: ^https?://(acs|g-acs|gw)\.m\.(goofish|taobao)\.com/(gw|h5)/mtop\.taobao\.(?:idlehome\.home\.(?:firstdata|nextfresh|newitem\.page)|idle\.home\.(?:firstdata|nextfresh|nextnearby)|idle\.local\.home)(?:/|\?|$)
     filter: |-
       def v($p): try getpath($p) catch null;
       def flagged: . == true or . == 1 or . == "true" or . == "1";
@@ -39,6 +39,12 @@ body_rewrites:
       else
         if (.data.sections | type) == "array" then
           .data.sections |= map(select(explicit_ad | not))
+        else . end
+        | if (.data.items | type) == "array" then
+          .data.items |= map(select(explicit_ad | not))
+        else . end
+        | if (.data.cardList | type) == "array" then
+          .data.cardList |= map(select(explicit_ad | not))
         else . end
       end
 - response_jq:
