@@ -1,0 +1,46 @@
+name: 小红书 fmz200 Lite V2 (Egern)
+description: 仅开屏、明确标记的信息流与评论广告、图片视频去水印与保存；不清理搜索、购物、直播、音乐、地点等正常内容。
+author: Custom Lite V2 (based on fmz200; references rednote-egern)
+homepage: https://github.com/XPengze01/xpengze-e
+
+# 只拒绝已知专用广告媒体域名，不拦截通用图片/视频 CDN。
+rules:
+  - domain:
+      match: ads-img-qc.xhscdn.com
+      policy: REJECT
+  - domain:
+      match: ads-img-al.xhscdn.com
+      policy: REJECT
+  - domain:
+      match: ads-img-bak.xhscdn.com
+      policy: REJECT
+  - domain:
+      match: ads-video-al.xhscdn.com
+      policy: REJECT
+  - domain:
+      match: ads-video-qc.xhscdn.com
+      policy: REJECT
+  - domain:
+      match: t-ads.xiaohongshu.com
+      policy: REJECT
+
+# 严格限定可修改的业务接口；不触碰搜索、私信、购物等。
+scriptings:
+  - http_response:
+      name: 小红书 Lite V2 选择性净化
+      match: '^https?://(edith|rec|www)\.(xiaohongshu|rnote)\.com/api/sns/(?:v[0-9]+/(?:system_service/(?:splash_config|splash_async_optimization|splash_online_decision)|homefeed|followfeed|note/(?:imagefeed|feed|videofeed|detailfeed(?:/preload)?|comment/(?:list|sub_comments)|live_photo/save|video/save))|v1/interaction/comment/video/download)(?:/?(?:[?#]|$))'
+      script_url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/Xiaohongshu-Lite-V2.js
+      update_interval: 3600
+      timeout: 15
+      body_required: true
+      max_size: 8388608
+
+mitm:
+  hostnames:
+    includes:
+      - edith.xiaohongshu.com
+      - rec.xiaohongshu.com
+      - www.xiaohongshu.com
+      - edith.rnote.com
+      - rec.rnote.com
+      - www.rnote.com
