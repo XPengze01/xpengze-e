@@ -1,24 +1,16 @@
 # 闲鱼 Lite V4：不拦截 HTTPDNS / AMDC / 支付、聊天及交易接口。
 # 与其它闲鱼去广告模块同时启用可能互相覆盖，请只启用一套。
-name: 闲鱼去广告 Lite V4（首页 + 商品详情保守过滤）
-description: 只去开屏、首页商品流和商品详情中明确标记的广告卡；不清空商品推荐、搜索、聊天、订单或支付；不碰 HTTPDNS/AMDC。
+name: 闲鱼去广告 Lite V4.1（无失效脚本）
+description: 仅清除开屏广告池、首页与商品详情中明确标记的广告卡；不依赖已失效的远程 JS，不修改搜索、聊天、订单、支付或 HTTPDNS/AMDC。
 author: custom based on ddgksf2013, KeLee, skernelx, ShiinaWong
 homepage: https://github.com/XPengze01/xpengze-e
-scriptings:
-- http_response:
-    name: 闲鱼开屏广告（固定版本）
-    match: ^https?://(acs|g-acs|gw)\.m\.(goofish|taobao)\.com/(gw|h5)/mtop\.taobao\.idlecommerce\.splash\.(?:async\.)?ads(?:/|\?|$)
-    script_url: https://raw.githubusercontent.com/skernelx/SurgeScripts/e186be665455844fdd5c31df201205fc5cb355a0/xianyu/xianyu-ad-block.egern.js
-    body_required: true
-    max_size: 2097152
-    timeout: 30
-    env:
-      NOTIFY_ONCE: 'true'
-- generic:
-    name: 闲鱼开屏诊断（手动）
-    script_url: https://raw.githubusercontent.com/skernelx/SurgeScripts/e186be665455844fdd5c31df201205fc5cb355a0/xianyu/xianyu-ad-block.egern.js
-    timeout: 30
 body_rewrites:
+- response_jq:
+    match: '^https?://(?:acs|g-acs|gw)\\.m\\.(?:goofish|taobao)\\.com/(?:gw|h5)/mtop\\.taobao\\.idlecommerce\\.splash\\.(?:async\\.)?ads(?:/|\\?|$)'
+    filter: >-
+      if (.data | type) == "object" then
+        .data |= (.adMap = {} | .cacheAdInfo = null | .realTimeAd = null)
+      else . end
 - response_jq:
     match: ^https?://(acs|g-acs|gw)\.m\.(goofish|taobao)\.com/(gw|h5)/mtop\.taobao\.(?:idlehome\.home\.(?:nextfresh|newitem\.page)|idle\.home\.(?:firstdata|nextfresh)|idle\.local\.home)(?:/|\?|$)
     filter: |-
