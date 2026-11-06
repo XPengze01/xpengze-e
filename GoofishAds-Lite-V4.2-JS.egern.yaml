@@ -1,0 +1,85 @@
+# 闲鱼 V4.2：自托管 Egern JS 开屏模块（测试版）。
+# 保留 V4.1 作为回滚；请勿与旧闲鱼模块同时启用。
+name: 闲鱼去广告 Lite V4.2 JS（自托管测试版）
+description: 开屏采用自有 GitHub Egern JS，首页和商品详情仅过滤明确广告；不修改交易、聊天、HTTPDNS。
+author: Custom Lite (based on community feed patterns)
+homepage: https://github.com/XPengze01/xpengze-e
+scriptings:
+  - http_response:
+      name: 闲鱼开屏广告（自托管 Egern JS）
+      match: '^https?://(?:acs|g-acs|gw)\.m\.(?:goofish|taobao)\.com/(?:gw|h5)/mtop\.taobao\.idlecommerce\.splash\.(?:async\.)?ads(?:/|\?|$)'
+      script_url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/GoofishSplash-Egern.js
+      update_interval: 3600
+      body_required: true
+      max_size: 2097152
+      timeout: 10
+body_rewrites:
+- response_jq:
+    match: ^https?://(acs|g-acs|gw)\.m\.(goofish|taobao)\.com/(gw|h5)/mtop\.taobao\.(?:idlehome\.home\.(?:nextfresh|newitem\.page)|idle\.home\.(?:firstdata|nextfresh)|idle\.local\.home)(?:/|\?|$)
+    filter: |-
+      def v($p): try getpath($p) catch null;
+      def flagged: . == true or . == 1 or . == "true" or . == "1";
+      def adtype: if type == "string" then
+        (ascii_downcase | IN("ad", "ads", "mamaad", "advertisement", "feed_ad", "native_ad"))
+        else false end;
+      def explicit_ad:
+        ([v(["isAd"]), v(["is_ad"]), v(["isAliMaMaAD"]),
+          v(["data", "isAd"]), v(["data", "is_ad"]), v(["data", "isAliMaMaAD"]),
+          v(["cardData", "isAliMaMaAD"]),
+          v(["data", "item", "main", "exContent", "isAliMaMaAD"])]
+         | any(flagged))
+        or
+        ([v(["bizType"]), v(["cardType"]), v(["modelType"]),
+          v(["data", "bizType"]), v(["data", "cardType"]),
+          v(["cardData", "bizType"]), v(["cardData", "cardType"]),
+          v(["data", "clickParam", "args", "cardType"]),
+          v(["data", "item", "main", "clickParam", "args", "biz_type"]),
+          v(["data", "item", "main", "exContent", "dislikeFeedback", "clickParam", "args", "bizType"]),
+          v(["template", "cardEnum"])]
+         | any(adtype));
+      if (.ret | type) == "array" and any(.ret[]; (type == "string" and startswith("SUCCESS::")) | not) then .
+      elif (.data | type) != "object" then .
+      else
+        if (.data.sections | type) == "array" then
+          .data.sections |= map(select(explicit_ad | not))
+        else . end
+      end
+- response_jq:
+    match: ^https?://(acs|g-acs|gw)\.m\.(goofish|taobao)\.com/(gw|h5)/mtop\.taobao\.idle\.item\.recommend(?:\.list)?(?:/|\?|$)
+    filter: |-
+      def v($p): try getpath($p) catch null;
+      def flagged: . == true or . == 1 or . == "true" or . == "1";
+      def adtype: if type == "string" then
+        (ascii_downcase | IN("ad", "ads", "mamaad", "advertisement", "feed_ad", "native_ad"))
+        else false end;
+      def explicit_ad:
+        ([v(["isAd"]), v(["is_ad"]), v(["isAliMaMaAD"]),
+          v(["data", "isAd"]), v(["data", "is_ad"]), v(["data", "isAliMaMaAD"]),
+          v(["cardData", "isAliMaMaAD"]),
+          v(["data", "item", "main", "exContent", "isAliMaMaAD"])]
+         | any(flagged))
+        or
+        ([v(["bizType"]), v(["cardType"]), v(["modelType"]),
+          v(["data", "bizType"]), v(["data", "cardType"]),
+          v(["cardData", "bizType"]), v(["cardData", "cardType"]),
+          v(["data", "clickParam", "args", "cardType"]),
+          v(["data", "item", "main", "clickParam", "args", "biz_type"]),
+          v(["data", "item", "main", "exContent", "dislikeFeedback", "clickParam", "args", "bizType"]),
+          v(["template", "cardEnum"])]
+         | any(adtype));
+      if (.ret | type) == "array" and any(.ret[]; (type == "string" and startswith("SUCCESS::")) | not) then .
+      elif (.data | type) != "object" then .
+      else
+        if (.data.cardList | type) == "array" then
+          .data.cardList |= map(select(explicit_ad | not))
+        else . end
+      end
+mitm:
+  hostnames:
+    includes:
+    - acs.m.goofish.com
+    - g-acs.m.goofish.com
+    - gw.m.goofish.com
+    - acs.m.taobao.com
+    - g-acs.m.taobao.com
+    - gw.m.taobao.com
