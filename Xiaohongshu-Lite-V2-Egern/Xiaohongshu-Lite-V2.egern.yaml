@@ -29,7 +29,7 @@ scriptings:
   - http_response:
       name: 小红书 Lite V2 选择性净化
       match: '^https?://(edith|rec|www)\.(xiaohongshu|rnote)\.com/api/sns/(?:v[0-9]+/(?:system_service/(?:splash_config|splash_async_optimization|splash_online_decision)|homefeed|followfeed|note/(?:imagefeed|feed|videofeed|detailfeed(?:/preload)?|comment/(?:list|sub_comments)|live_photo/save|video/save))|v1/interaction/comment/video/download)(?:/?(?:[?#]|$))'
-      script_url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/Xiaohongshu-Lite-V2.js
+      script_url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/Xiaohongshu-Lite-V2-Egern/Xiaohongshu-Lite-V2.js
       update_interval: 3600
       timeout: 15
       body_required: true
