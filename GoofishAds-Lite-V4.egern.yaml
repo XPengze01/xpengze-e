@@ -6,7 +6,7 @@ author: custom based on ddgksf2013, KeLee, skernelx, ShiinaWong
 homepage: https://github.com/XPengze01/xpengze-e
 body_rewrites:
 - response_jq:
-    match: '^https?://(?:acs|g-acs|gw)\\.m\\.(?:goofish|taobao)\\.com/(?:gw|h5)/mtop\\.taobao\\.idlecommerce\\.splash\\.(?:async\\.)?ads(?:/|\\?|$)'
+    match: '^https?://(?:acs|g-acs|gw)\.m\.(?:goofish|taobao)\.com/(?:gw|h5)/mtop\.taobao\.idlecommerce\.splash\.(?:async\.)?ads(?:/|\?|$)'
     filter: >-
       if (.data | type) == "object" then
         .data |= (.adMap = {} | .cacheAdInfo = null | .realTimeAd = null)
