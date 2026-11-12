@@ -1,0 +1,90 @@
+# Native Egern module; No env_schema: all advertising filters are on by default.
+# IMPORTANT: upload the companion JS into the same GitHub path before enabling.
+# DISABLE the legacy fmz200 / WeiboEnhanced / other Weibo ad modules to avoid conflicts.
+name: 微博去广告 Safe V1.1 · 全部默认生效
+description: 默认过滤开屏、首页、评论、详情、发现、搜索、视频、个人页及明确标记的消息广告；不改发帖、上传、草稿、登录或正常消息，不拦截整域。
+author: Custom conservative implementation; references fmz200 / ddgksf2013 / RuCu6 / zmqcherish
+homepage: https://github.com/XPengze01/xpengze-e
+icon: shield.checkered
+scriptings:
+- http_response:
+    name: 微博开屏广告
+    match: ^https?://(?:bootpreload\.uve\.weibo\.com/v[0-9]+/ad/preload|bootrealtime\.uve\.weibo\.com/v[0-9]+/ad/realtime|sdkapp\.uve\.weibo\.com/interface/sdk/sdkad\.php|wbapp\.uve\.weibo\.com/(?:wbapplua/wbpullad\.lua|preload/get_ad))(?:/?(?:\?|$))
+    script_url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/WeiboAds-Safe-V1.1-Egern/WeiboAds-Safe-V1.1.js
+    update_interval: 3600
+    timeout: 8
+    body_required: true
+    max_size: 8388608
+- http_response:
+    name: 微博首页信息流广告
+    match: ^https?://(?:api\.weibo\.cn|mapi\.weibo\.com)/2/(?:statuses/(?:friends/timeline|unread_friends_timeline|unread_hot_timeline|container_timeline(?:_hot|_unread)?)|guest/container_timeline_hot|groups/timeline|cardlist)(?:/?(?:\?|$))
+    script_url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/WeiboAds-Safe-V1.1-Egern/WeiboAds-Safe-V1.1.js
+    update_interval: 3600
+    timeout: 8
+    body_required: true
+    max_size: 8388608
+- http_response:
+    name: 微博评论与回复广告
+    match: ^https?://(?:api\.weibo\.cn|mapi\.weibo\.com)/2/(?:comments/(?:mix_comments|build_comments|hotflow)|statuses/(?:container_detail_comment|container_detail_mix))(?:/?(?:\?|$))
+    script_url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/WeiboAds-Safe-V1.1-Egern/WeiboAds-Safe-V1.1.js
+    update_interval: 3600
+    timeout: 8
+    body_required: true
+    max_size: 8388608
+- http_response:
+    name: 微博详情贴片广告
+    match: ^https?://(?:api\.weibo\.cn|mapi\.weibo\.com)/2/statuses/(?:container_detail|extend|show)(?:/?(?:\?|$))
+    script_url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/WeiboAds-Safe-V1.1-Egern/WeiboAds-Safe-V1.1.js
+    update_interval: 3600
+    timeout: 8
+    body_required: true
+    max_size: 8388608
+- http_response:
+    name: 微博发现页广告
+    match: ^https?://(?:api\.weibo\.cn|mapi\.weibo\.com)/2/search/(?:finder|container_timeline|container_discover)(?:/?(?:\?|$))
+    script_url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/WeiboAds-Safe-V1.1-Egern/WeiboAds-Safe-V1.1.js
+    update_interval: 3600
+    timeout: 8
+    body_required: true
+    max_size: 8388608
+- http_response:
+    name: 微博搜索与热搜广告
+    match: ^https?://(?:api\.weibo\.cn|mapi\.weibo\.com)/2/(?:searchall|flowpage|page)(?:/?(?:\?|$))
+    script_url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/WeiboAds-Safe-V1.1-Egern/WeiboAds-Safe-V1.1.js
+    update_interval: 3600
+    timeout: 8
+    body_required: true
+    max_size: 8388608
+- http_response:
+    name: 微博视频流广告
+    match: ^https?://(?:api\.weibo\.cn|mapi\.weibo\.com)/2/(?:video/(?:flow_stream|flow_stream_cache|tiny_stream_video_list|community_tab|full_screen_stream)|statuses/video_mixtimeline)(?:/?(?:\?|$))
+    script_url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/WeiboAds-Safe-V1.1-Egern/WeiboAds-Safe-V1.1.js
+    update_interval: 3600
+    timeout: 8
+    body_required: true
+    max_size: 8388608
+- http_response:
+    name: 微博个人页明确广告
+    match: ^https?://(?:api\.weibo\.cn|mapi\.weibo\.com)/2/profile/(?:me|container_timeline)(?:/?(?:\?|$))
+    script_url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/WeiboAds-Safe-V1.1-Egern/WeiboAds-Safe-V1.1.js
+    update_interval: 3600
+    timeout: 8
+    body_required: true
+    max_size: 8388608
+- http_response:
+    name: 微博消息流广告（仅 msg_card.ad_tag）
+    match: ^https?://(?:api\.weibo\.cn|mapi\.weibo\.com)/2/messageflow(?:/?(?:\?|$))
+    script_url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/WeiboAds-Safe-V1.1-Egern/WeiboAds-Safe-V1.1.js
+    update_interval: 3600
+    timeout: 8
+    body_required: true
+    max_size: 8388608
+mitm:
+  hostnames:
+    includes:
+    - api.weibo.cn
+    - mapi.weibo.com
+    - bootpreload.uve.weibo.com
+    - bootrealtime.uve.weibo.com
+    - sdkapp.uve.weibo.com
+    - wbapp.uve.weibo.com
