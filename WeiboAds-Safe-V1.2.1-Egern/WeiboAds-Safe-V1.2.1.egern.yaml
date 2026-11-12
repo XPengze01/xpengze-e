@@ -2,7 +2,7 @@
 # IMPORTANT: disable the old V1.1 module while testing this separate V1.2 module.
 # DISABLE the legacy fmz200 / WeiboEnhanced / other Weibo ad modules to avoid conflicts.
 name: 微博去广告 Safe V1.2.1 · 信息流精准增强版
-description: 强化首页和最新微博广告识别，忽略空promotion标记，主页仅精确识别广告；其他场景保留安全规则，不改发帖、上传、草稿、登录或正常消息，不拦截整域。
+description: 强化首页和最新微博广告识别，忽略空promotion标记，仅我的页面精确识别广告，其他博主主页不改写；其他场景保留安全规则，不改发帖、上传、草稿、登录或正常消息，不拦截整域。
 author: Custom conservative implementation; references fmz200 / ddgksf2013 / RuCu6 / zmqcherish
 homepage: https://github.com/XPengze01/xpengze-e
 icon: shield.checkered
@@ -64,8 +64,8 @@ scriptings:
     body_required: true
     max_size: 8388608
 - http_response:
-    name: 微博个人页明确广告
-    match: ^https?://(?:m?api\.weibo\.(?:cn|com))/2/profile/(?:me|container_timeline)(?:/?(?:\?|$))
+    name: 微博个人页明确广告（仅我的页面）
+    match: ^https?://(?:m?api\.weibo\.(?:cn|com))/2/profile/me(?:/?(?:\?|$))
     script_url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/WeiboAds-Safe-V1.2.1-Egern/WeiboAds-Safe-V1.2.1.js
     update_interval: 3600
     timeout: 8
