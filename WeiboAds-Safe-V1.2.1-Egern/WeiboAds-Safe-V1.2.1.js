@@ -8,7 +8,7 @@
  * 2) Publish/upload/draft/login/payment paths are not on the allowlist.
  * 3) Strong feed-only promotion filtering, ignoring null/false/0/empty values.
  * 4) JSON parse failures, non-2xx responses and exceptions pass through.
- * 5) Profile and comments use precise ad flags; recommendation metadata may be filtered in feeds.
+ * 5) Other users' profile timelines are untouched; own profile/comments use precise flags.
  * 6) All ad categories are on by default; no settings/environment controls.
  * 7) For messageflow, only remove msg_card.ad_tag, not normal messages.
  */
@@ -22,7 +22,7 @@ const ROUTES = [
   { type: 'discovery', key: 'DISCOVERY', re: /^\/search\/(?:finder|container_timeline|container_discover)\/?$/ },
   { type: 'search', key: 'SEARCH', re: /^\/(?:searchall|flowpage|page)\/?$/ },
   { type: 'video', key: 'VIDEO', re: /^\/(?:video\/(?:flow_stream|flow_stream_cache|tiny_stream_video_list|community_tab|full_screen_stream)|statuses\/video_mixtimeline)\/?$/ },
-  { type: 'profile', key: 'PROFILE', re: /^\/profile\/(?:me|container_timeline)\/?$/ },
+  { type: 'profile', key: 'PROFILE', re: /^\/profile\/me\/?$/ },
   { type: 'messages', key: 'MESSAGES', re: /^\/messageflow\/?$/ }
 ];
 
