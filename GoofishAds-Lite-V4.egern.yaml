@@ -1,21 +1,10 @@
-# 闲鱼 Lite V4.2.0：在 V4.1.1 基础上强化开屏响应，计数归零、增加 splash.config 和广告联盟域名。
+# 闲鱼 Lite V4.2.0：在 V4.1.1 基础上强化开屏响应，计数归零、增加 splash.config；不启用广告联盟域名拦截。
 # 首页和详情规则与 V4.1.1 完全一致；不拦截 HTTPDNS / AMDC / 支付、聊天及交易接口。
 # 请只启用一套闲鱼去广告模块，并停用旧 V4.1.1 与 V4.2 JS 测试版。
-# 注意：域名级 REJECT 作用于所有 App，可能影响使用相同广告 SDK 的其他应用。
 name: 闲鱼去广告 Lite V4.2.0（开屏强化）
-description: 清除开屏广告池及数字展示次数，屏蔽3个广告联盟域名；首页和商品详情仅过滤明确广告；不修改搜索、聊天、订单、支付或 HTTPDNS/AMDC。
+description: 清除开屏广告池及数字展示次数；首页和商品详情仅过滤明确广告；不修改搜索、聊天、订单、支付或 HTTPDNS/AMDC；不拦截第三方广告联盟域名。
 author: custom based on ddgksf2013, KeLee, skernelx, ShiinaWong, y0unge
 homepage: https://github.com/XPengze01/xpengze-e
-rules:
-- domain:
-    match: ssp.iytcdn.com
-    policy: REJECT
-- domain:
-    match: bid.ad-scope.com.cn
-    policy: REJECT
-- domain:
-    match: sdk.beizi.biz
-    policy: REJECT
 body_rewrites:
 - response_jq:
     match: '^https?://(?:acs|g-acs|gw)\.m\.(?:goofish|taobao)\.com/(?:gw|h5)/mtop\.taobao\.idlecommerce\.splash\.(?:async\.)?ads(?:/|\?|$)'
