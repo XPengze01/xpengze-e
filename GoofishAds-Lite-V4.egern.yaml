@@ -1,15 +1,49 @@
-# 闲鱼 Lite V4.1.1：补充 idlehome.home.firstdata 首屏接口，按明确广告标记过滤；不拦截 HTTPDNS / AMDC / 支付、聊天及交易接口。
-# 与其它闲鱼去广告模块同时启用可能互相覆盖，请只启用一套。
-name: 闲鱼去广告 Lite V4.1.1（首页首屏补漏）
-description: 仅清除开屏广告池、首页与商品详情中明确标记的广告卡；不依赖已失效的远程 JS，不修改搜索、聊天、订单、支付或 HTTPDNS/AMDC。
-author: custom based on ddgksf2013, KeLee, skernelx, ShiinaWong
+# 闲鱼 Lite V4.2.0：在 V4.1.1 基础上强化开屏响应，计数归零、增加 splash.config 和广告联盟域名。
+# 首页和详情规则与 V4.1.1 完全一致；不拦截 HTTPDNS / AMDC / 支付、聊天及交易接口。
+# 请只启用一套闲鱼去广告模块，并停用旧 V4.1.1 与 V4.2 JS 测试版。
+# 注意：域名级 REJECT 作用于所有 App，可能影响使用相同广告 SDK 的其他应用。
+name: 闲鱼去广告 Lite V4.2.0（开屏强化）
+description: 清除开屏广告池及数字展示次数，屏蔽3个广告联盟域名；首页和商品详情仅过滤明确广告；不修改搜索、聊天、订单、支付或 HTTPDNS/AMDC。
+author: custom based on ddgksf2013, KeLee, skernelx, ShiinaWong, y0unge
 homepage: https://github.com/XPengze01/xpengze-e
+rules:
+- domain:
+    match: ssp.iytcdn.com
+    policy: REJECT
+- domain:
+    match: bid.ad-scope.com.cn
+    policy: REJECT
+- domain:
+    match: sdk.beizi.biz
+    policy: REJECT
 body_rewrites:
 - response_jq:
     match: '^https?://(?:acs|g-acs|gw)\.m\.(?:goofish|taobao)\.com/(?:gw|h5)/mtop\.taobao\.idlecommerce\.splash\.(?:async\.)?ads(?:/|\?|$)'
-    filter: >-
+    filter: |-
+      def zero_counts:
+        walk(
+          if type == "object" then
+            with_entries(
+              if (.key | test("(max|left)showcount|showtimes"; "i")) and ((.value | type) == "number")
+              then .value = 0
+              else . end)
+          else . end);
       if (.data | type) == "object" then
-        .data |= (.adMap = {} | .cacheAdInfo = null | .realTimeAd = null)
+        .data |= (.adMap = {} | .cacheAdInfo = null | .realTimeAd = null | zero_counts)
+      else . end
+- response_jq:
+    match: '^https?://(?:acs|g-acs|gw)\.m\.(?:goofish|taobao)\.com/(?:gw|h5)/mtop\.taobao\.idlecommerce\.splash\.config(?:/|\?|$)'
+    filter: |-
+      def zero_counts:
+        walk(
+          if type == "object" then
+            with_entries(
+              if (.key | test("(max|left)showcount|showtimes"; "i")) and ((.value | type) == "number")
+              then .value = 0
+              else . end)
+          else . end);
+      if (.data | type) == "object" then
+        .data |= zero_counts
       else . end
 - response_jq:
     match: ^https?://(acs|g-acs|gw)\.m\.(goofish|taobao)\.com/(gw|h5)/mtop\.taobao\.(?:idlehome\.home\.(?:firstdata|nextfresh|newitem\.page)|idle\.home\.(?:firstdata|nextfresh|nextnearby)|idle\.local\.home)(?:/|\?|$)
