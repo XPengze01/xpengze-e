@@ -1,11 +1,11 @@
 /**
- * 小红书 / RedNote Lite V2 — Egern 原生响应脚本
- * 目标：开屏、明确标记的首页/视频/评论广告、图片及视频去水印/保存。
- * 不处理搜索、商品/直播、音乐、地点、个人页、聊天和普通推荐。
+ * 小红书 / RedNote Lite V2.1 — Egern 原生响应脚本
+ * 目标：开屏、明确标记的首页/关注/搜索/视频/评论与笔记组件广告、图片及视频去水印/保存。
+ * 搜索仅移除明确广告条目；不清理普通搜索、商品/直播、音乐、地点、个人页或聊天。
  * 参考：fmz200/wool_scripts、patrickyanxxxxx/rednote-egern（功能思路）
  * 更新须人工确认；出现异常时保留原始响应，避免影响浏览。
  */
-const VERSION = '2.0.0';
+const VERSION = '2.1.0';
 const VIDEO_KEY = 'xhs_lite_v2_video_urls';
 const LIVE_KEY = 'xhs_lite_v2_live_urls';
 const COMMENT_KEY = 'xhs_lite_v2_comment_urls';
@@ -51,6 +51,40 @@ function filterKnownLists(data) {
   }
   return changed;
 }
+// Note widgets: remove explicitly advertising components, never generic widgets.
+const WIDGET_AD_KEYS = new Set([
+  'ads_goods_cards', 'ads_comment_component', 'ads_engage_bar',
+  'pgy_comment_component', 'pgy_engage_bar'
+]);
+const WIDGET_CHILD_KEYS = new Set([
+  'data', 'generic', 'widget_list', 'widgets', 'items',
+  'cards', 'components', 'sections', 'groups'
+]);
+function filterWidgetAds(node, depth = 0) {
+  if (depth > 6) return false;
+  if (Array.isArray(node)) {
+    const changed = filterAds(node);
+    let nested = false;
+    for (const item of node) nested = filterWidgetAds(item, depth + 1) || nested;
+    return changed || nested;
+  }
+  if (!obj(node)) return false;
+  let changed = false;
+  for (const key of Object.keys(node)) {
+    if (WIDGET_AD_KEYS.has(key)) {
+      delete node[key];
+      changed = true;
+    } else if (key === 'second_jump_bar' &&
+      obj(node[key]) && (node[key].type === 'ads' || node[key].model_type === 'ads')) {
+      delete node[key];
+      changed = true;
+    } else if (WIDGET_CHILD_KEYS.has(key)) {
+      changed = filterWidgetAds(node[key], depth + 1) || changed;
+    }
+  }
+  return changed;
+}
+
 function filterComments(data) {
   if (!obj(data) || !Array.isArray(data.comments)) return false;
   let changed = filterAds(data.comments);
@@ -230,7 +264,7 @@ export default async function(ctx) {
   try {
     if (/\/system_service\/(?:splash_config|splash_async_optimization|splash_online_decision)\/?$/.test(path)) {
       changed = cleanSplash(root, path);
-    } else if (/\/v\d+\/(?:homefeed|followfeed)\/?$/.test(path)) {
+    } else if (/\/v\d+\/(?:homefeed|followfeed|user\/followings\/followfeed)\/?$/.test(path)) {
       changed = filterKnownLists(root.data);
     } else if (/\/v\d+\/note\/(?:imagefeed|feed|videofeed|detailfeed(?:\/preload)?)\/?$/.test(path)) {
       // 视频流也需要过滤明确标记的广告，其余商品/直播正常保留。
@@ -240,6 +274,12 @@ export default async function(ctx) {
       const caches = extractDownloadCaches(notes);
       mergeCache(ctx, VIDEO_KEY, caches.videos);
       mergeCache(ctx, LIVE_KEY, caches.lives);
+    } else if (/\/v\d+\/search\/notes\/?$/.test(path)) {
+      // Keep non-ad results, including genuine live/product/user entries.
+      changed = filterKnownLists(root.data);
+    } else if (/\/v\d+\/note\/widgets\/?$/.test(path)) {
+      // Only explicit ad widget keys/items; no blanket widget or search removal.
+      changed = filterWidgetAds(root.data);
     } else if (/\/v\d+\/note\/comment\/(?:list|sub_comments)\/?$/.test(path)) {
       changed = filterComments(root.data);
       mergeCache(ctx, COMMENT_KEY, extractCommentVideos(root.data));
