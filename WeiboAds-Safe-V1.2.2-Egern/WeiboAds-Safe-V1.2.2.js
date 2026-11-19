@@ -1,5 +1,5 @@
 /**
- * Weibo Ads Safe V1.2.2 — Egern native response-only script.
+ * Weibo Ads Safe V1.2.3 — Egern native response-only script.
  * Inspired by publicly documented ad markers from fmz200, zmqcherish,
  * RuCu6 and ddgksf2013 WeiboEnhanced; independently implemented.
  *
@@ -11,7 +11,7 @@
  * 5) Followed authors' sponsored posts stay visible in home timelines; unknown authors' ads are removed.
  *    Other users' profile timelines are untouched; own profile/comments use precise flags.
  * 6) All ad categories are on by default; no settings/environment controls.
- * 7) For messageflow, only remove msg_card.ad_tag, not normal messages.
+ * 7) For messageflow and messageflow/notice, only remove msg_card.ad_tag, not normal messages.
  */
 
 const WEB_API_HOSTS = new Set(['api.weibo.cn', 'api.weibo.com', 'mapi.weibo.cn', 'mapi.weibo.com']);
@@ -26,7 +26,7 @@ const ROUTES = [
   { type: 'search', key: 'SEARCH', re: /^\/(?:searchall|flowpage|page)\/?$/ },
   { type: 'video', key: 'VIDEO', re: /^\/(?:video\/(?:flow_stream|flow_stream_cache|tiny_stream_video_list|community_tab|full_screen_stream)|statuses\/video_mixtimeline)\/?$/ },
   { type: 'profile', key: 'PROFILE', re: /^\/profile\/me\/?$/ },
-  { type: 'messages', key: 'MESSAGES', re: /^\/messageflow\/?$/ }
+  { type: 'messages', key: 'MESSAGES', re: /^\/messageflow(?:\/notice)?\/?$/ }
 ];
 
 // Deliberately redundant denylist: even if an allowlist is expanded later,
