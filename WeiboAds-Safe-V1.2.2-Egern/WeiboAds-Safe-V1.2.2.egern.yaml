@@ -1,8 +1,8 @@
-# Native Egern module V1.2.2. Strong feed ad filtering on by default.
+# Native Egern module V1.2.3 (stable V1.2.2 subscription path). Strong feed ad filtering on by default.
 # IMPORTANT: disable V1.1, V1.2 and V1.2.1 when enabling this V1.2.2 module.
 # DISABLE the legacy fmz200 / WeiboEnhanced / other Weibo ad modules to avoid conflicts.
-name: 微博去广告 Safe V1.2.2 · 信息流关注保护版
-description: 首页和最新微博保留已关注博主的推广内容，仍过滤未关注账号广告；空推广字段不误删，其他博主主页不改写，不影响发帖、上传、草稿、登录或正常消息。
+name: 微博去广告 Safe V1.2.3 · 关注保护及通知广告补漏
+description: 首页和最新微博保留已关注博主推广，过滤未关注广告；补充通知流带 msg_card.ad_tag 的广告项；其他博主主页不改写，正常消息和发帖上传不受影响。
 author: Custom conservative implementation; references fmz200 / ddgksf2013 / RuCu6 / zmqcherish
 homepage: https://github.com/XPengze01/xpengze-e
 icon: shield.checkered
@@ -72,8 +72,8 @@ scriptings:
     body_required: true
     max_size: 8388608
 - http_response:
-    name: 微博消息流广告（仅 msg_card.ad_tag）
-    match: ^https?://(?:m?api\.weibo\.(?:cn|com))/2/messageflow(?:/?(?:\?|$))
+    name: 微博消息及通知流广告（仅 msg_card.ad_tag）
+    match: ^https?://(?:m?api\.weibo\.(?:cn|com))/2/messageflow(?:/notice)?(?:/?(?:\?|$))
     script_url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/WeiboAds-Safe-V1.2.2-Egern/WeiboAds-Safe-V1.2.2.js
     update_interval: 3600
     timeout: 8
