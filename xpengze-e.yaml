@@ -387,8 +387,8 @@ modules:
   compat_arguments:
     Proxy: PROXY
   enabled: false
-- url: http://script.hub/file/_start_/https://raw.githubusercontent.com/ddgksf2013/Rewrite/master/AdBlock/XiaoHongShuAds.conf/_end_/XiaoHongShuAds.sgmodule?type=qx-rewrite&n=小红书去广告@ddgksf2013+应用净化&headers=User-Agent:surge&del=true&jqEnabled=true&target=surge-module
-  enabled: true
+- url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/Xiaohongshu-Lite-V2-Egern/Xiaohongshu-Lite-V2.egern.yaml
+  enabled: false
 - url: http://script.hub/file/_start_/https://raw.githubusercontent.com/Yuheng0101/X/refs/heads/main/Scripts/ChinaMobile/NoAds.js/_end_/NoAds.sgmodule?type=qx-rewrite&n=中国移动去广告@Yuheng+应用净化&headers=User-Agent:surge&del=true&jqEnabled=true&target=surge-module
   enabled: true
 - name: 闲鱼去广告 Lite V4.2.0（开屏强化）
@@ -402,8 +402,8 @@ modules:
   enabled: true
 - url: http://script.hub/file/_start_/https://raw.githubusercontent.com/ddgksf2013/Rewrite/master/AdBlock/YoutubeAds.conf/_end_/YoutubeAds.sgmodule?type=qx-rewrite&n=Youtube去广告@Maasea+视频自动PIP，背景播放&headers=User-Agent:surge&del=true&jqEnabled=true&target=surge-module
   enabled: true
-- url: http://script.hub/file/_start_/https://raw.githubusercontent.com/fmz200/wool_scripts/refs/heads/main/Surge/module/weibo.module/_end_/weibo.sgmodule?type=surge-module&target=surge-module&del=true&jqEnabled=true
-  enabled: true
+- url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/WeiboAds-Safe-V1.2.2-Egern/WeiboAds-Safe-V1.2.2.egern.yaml
+  enabled: false
 - url: http://script.hub/file/_start_/https://raw.githubusercontent.com/NobyDa/Script/refs/heads/master/Surge/Module/GoogleCAPTCHA.sgmodule/_end_/GoogleCAPTCHA.sgmodule?type=surge-module&target=surge-module&del=true&jqEnabled=true
   compat_arguments:
     脚本引擎: .+
