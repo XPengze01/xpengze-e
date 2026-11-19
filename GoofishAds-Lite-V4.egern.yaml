@@ -1,8 +1,8 @@
-# 闲鱼 Lite V4.2.0：在 V4.1.1 基础上强化开屏响应，计数归零、增加 splash.config；不启用广告联盟域名拦截。
-# 首页和详情规则与 V4.1.1 完全一致；不拦截 HTTPDNS / AMDC / 支付、聊天及交易接口。
+# 闲鱼 Lite V4.2.1：基于 V4.2.0 修复开屏错误响应保护，补充首页和详情深层明确广告标记；继续不拦截广告联盟域名。
+# 首页和详情仅过滤明确广告类型与标记，增加已知嵌套识别；不拦截 HTTPDNS / AMDC / 支付、聊天及交易接口。
 # 请只启用一套闲鱼去广告模块，并停用旧 V4.1.1 与 V4.2 JS 测试版。
-name: 闲鱼去广告 Lite V4.2.0（开屏强化）
-description: 清除开屏广告池及数字展示次数；首页和商品详情仅过滤明确广告；不修改搜索、聊天、订单、支付或 HTTPDNS/AMDC；不拦截第三方广告联盟域名。
+name: 闲鱼去广告 Lite V4.2.1（精准补漏）
+description: 开屏仅在成功响应时清除广告池与展示次数；首页和商品详情增加深层明确广告标记过滤，保留普通卡片；不修改搜索、聊天、订单、支付或 HTTPDNS/AMDC，不拦截广告联盟域名。
 author: custom based on ddgksf2013, KeLee, skernelx, ShiinaWong, y0unge
 homepage: https://github.com/XPengze01/xpengze-e
 body_rewrites:
@@ -17,7 +17,9 @@ body_rewrites:
               then .value = 0
               else . end)
           else . end);
-      if (.data | type) == "object" then
+      if (.success == false) or
+         ((.ret | type) == "array" and any(.ret[]; (type == "string" and startswith("SUCCESS::")) | not)) then .
+      elif (.data | type) == "object" then
         .data |= (.adMap = {} | .cacheAdInfo = null | .realTimeAd = null | zero_counts)
       else . end
 - response_jq:
@@ -31,7 +33,9 @@ body_rewrites:
               then .value = 0
               else . end)
           else . end);
-      if (.data | type) == "object" then
+      if (.success == false) or
+         ((.ret | type) == "array" and any(.ret[]; (type == "string" and startswith("SUCCESS::")) | not)) then .
+      elif (.data | type) == "object" then
         .data |= zero_counts
       else . end
 - response_jq:
@@ -46,6 +50,7 @@ body_rewrites:
         ([v(["isAd"]), v(["is_ad"]), v(["isAliMaMaAD"]),
           v(["data", "isAd"]), v(["data", "is_ad"]), v(["data", "isAliMaMaAD"]),
           v(["cardData", "isAliMaMaAD"]),
+          v(["data", "item", "main", "isAliMaMaAD"]),
           v(["data", "item", "main", "exContent", "isAliMaMaAD"])]
          | any(flagged))
         or
@@ -53,6 +58,8 @@ body_rewrites:
           v(["data", "bizType"]), v(["data", "cardType"]),
           v(["cardData", "bizType"]), v(["cardData", "cardType"]),
           v(["data", "clickParam", "args", "cardType"]),
+          v(["data", "clickParam", "args", "bizType"]),
+          v(["data", "item", "main", "clickParam", "args", "cardType"]),
           v(["data", "item", "main", "clickParam", "args", "biz_type"]),
           v(["data", "item", "main", "exContent", "dislikeFeedback", "clickParam", "args", "bizType"]),
           v(["template", "cardEnum"])]
@@ -82,6 +89,7 @@ body_rewrites:
         ([v(["isAd"]), v(["is_ad"]), v(["isAliMaMaAD"]),
           v(["data", "isAd"]), v(["data", "is_ad"]), v(["data", "isAliMaMaAD"]),
           v(["cardData", "isAliMaMaAD"]),
+          v(["data", "item", "main", "isAliMaMaAD"]),
           v(["data", "item", "main", "exContent", "isAliMaMaAD"])]
          | any(flagged))
         or
@@ -89,6 +97,8 @@ body_rewrites:
           v(["data", "bizType"]), v(["data", "cardType"]),
           v(["cardData", "bizType"]), v(["cardData", "cardType"]),
           v(["data", "clickParam", "args", "cardType"]),
+          v(["data", "clickParam", "args", "bizType"]),
+          v(["data", "item", "main", "clickParam", "args", "cardType"]),
           v(["data", "item", "main", "clickParam", "args", "biz_type"]),
           v(["data", "item", "main", "exContent", "dislikeFeedback", "clickParam", "args", "bizType"]),
           v(["template", "cardEnum"])]
