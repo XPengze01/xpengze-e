@@ -1,12 +1,13 @@
 /**
- * 小红书 / RedNote Lite V2.2 — Egern 原生响应脚本
+ * 小红书 / RedNote Lite V2.3 — Egern 原生响应脚本
  * 目标：开屏、明确标记的首页/关注/搜索/视频/评论与笔记组件广告、图片与视频保存。
- * V2.2: 递归识别常见笔记包装层，覆盖嵌套的图片保存禁水印设置；资源级水印由 YAML 精准处理。
+ * V2.2: 递归识别笔记包装层，覆盖图片保存禁水印设置；资源级水印由 YAML 精准处理。
+ * V2.3: 仅在评论响应中修正 /comment/ 图片 URL 的水印图像处理参数；保护签名链接。
  * 搜索仅移除明确广告条目；不清理普通搜索、商品/直播、音乐、地点、个人页或聊天。
  * 参考：fmz200/wool_scripts、patrickyanxxxxx/rednote-egern（功能思路）
  * 更新须人工确认；出现异常时保留原始响应，避免影响浏览。
  */
-const VERSION = '2.2.0';
+const VERSION = '2.3.0';
 const VIDEO_KEY = 'xhs_lite_v2_video_urls';
 const LIVE_KEY = 'xhs_lite_v2_live_urls';
 const COMMENT_KEY = 'xhs_lite_v2_comment_urls';
@@ -81,6 +82,58 @@ function filterWidgetAds(node, depth = 0) {
       changed = true;
     } else if (WIDGET_CHILD_KEYS.has(key)) {
       changed = filterWidgetAds(node[key], depth + 1) || changed;
+    }
+  }
+  return changed;
+}
+
+
+// Comment images differ from note images: their picture URLs can include
+// watermark/transformation queries. Strip those only for /comment/ media on
+// recognised RedNote media hosts; never rewrite arbitrary CDN or signed URLs.
+function stripCommentImageUrl(value) {
+  if (typeof value !== 'string' || !value.includes('?')) return value;
+  let url;
+  try { url = new URL(value); } catch (_) { return value; }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return value;
+  const host = url.hostname.toLowerCase();
+  const trusted = ['xhscdn.com', 'xiaohongshu.com', 'rnote.com'];
+  if (!trusted.some(d => host === d || host.endsWith('.' + d))) return value;
+  if (!url.pathname.includes('/comment/')) return value;
+  // Signed links may require their query to be valid and must be preserved.
+  if (/(?:^|&)(?:sign|signature|token|auth_key|expires|expiration|policy|x-sign|x-oss-[^=&]*|x-amz-[^=&]*)(?:=|&|$)/i.test(url.search.slice(1))) return value;
+  return value.slice(0, value.indexOf('?')) + url.hash;
+}
+function rewriteCommentPictures(node, depth = 0, count = { visited: 0 }) {
+  if (!node || typeof node !== 'object' || depth > 8 || count.visited >= 1800) return false;
+  count.visited++;
+  if (Array.isArray(node)) {
+    let changed = false;
+    for (const item of node) changed = rewriteCommentPictures(item, depth + 1, count) || changed;
+    return changed;
+  }
+  let changed = false;
+  if (Array.isArray(node.pictures)) {
+    for (const image of node.pictures) {
+      if (!obj(image)) continue;
+      for (const key of ['url', 'origin_url']) {
+        const next = stripCommentImageUrl(image[key]);
+        if (next !== image[key]) { image[key] = next; changed = true; }
+      }
+      if (obj(image.meme_package)) {
+        const next = stripCommentImageUrl(image.meme_package.image_url);
+        if (next !== image.meme_package.image_url) {
+          image.meme_package.image_url = next;
+          changed = true;
+        }
+      }
+    }
+  }
+  // Traverse comment response wrappers without touching any non-picture fields.
+  for (const [key, value] of Object.entries(node)) {
+    if (key === 'pictures') continue;
+    if (value && typeof value === 'object') {
+      changed = rewriteCommentPictures(value, depth + 1, count) || changed;
     }
   }
   return changed;
@@ -308,7 +361,9 @@ export default async function(ctx) {
       changed = filterWidgetAds(root.data);
     } else if (/\/v\d+\/note\/comment\/(?:list|sub_comments)\/?$/.test(path)) {
       changed = filterComments(root.data);
+      // Capture video URLs as before, then remove image watermark URL queries.
       mergeCache(ctx, COMMENT_KEY, extractCommentVideos(root.data));
+      changed = rewriteCommentPictures(root.data) || changed;
     } else if (/\/v\d+\/note\/video\/save\/?$/.test(path)) {
       const id = root.data?.note_id;
       const url = id && readJSON(ctx, VIDEO_KEY)[String(id)];
