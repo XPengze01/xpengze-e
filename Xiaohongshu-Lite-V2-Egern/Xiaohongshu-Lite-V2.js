@@ -1,11 +1,12 @@
 /**
- * 小红书 / RedNote Lite V2.1 — Egern 原生响应脚本
- * 目标：开屏、明确标记的首页/关注/搜索/视频/评论与笔记组件广告、图片及视频去水印/保存。
+ * 小红书 / RedNote Lite V2.2 — Egern 原生响应脚本
+ * 目标：开屏、明确标记的首页/关注/搜索/视频/评论与笔记组件广告、图片与视频保存。
+ * V2.2: 递归识别常见笔记包装层，覆盖嵌套的图片保存禁水印设置；资源级水印由 YAML 精准处理。
  * 搜索仅移除明确广告条目；不清理普通搜索、商品/直播、音乐、地点、个人页或聊天。
  * 参考：fmz200/wool_scripts、patrickyanxxxxx/rednote-egern（功能思路）
  * 更新须人工确认；出现异常时保留原始响应，避免影响浏览。
  */
-const VERSION = '2.1.0';
+const VERSION = '2.2.0';
 const VIDEO_KEY = 'xhs_lite_v2_video_urls';
 const LIVE_KEY = 'xhs_lite_v2_live_urls';
 const COMMENT_KEY = 'xhs_lite_v2_comment_urls';
@@ -127,25 +128,50 @@ function enableSave(note) {
     entries.push({ type: 'video_download' });
     changed = true;
   }
+  // Some image beans carry their own saved-watermark flag, independent of the note.
+  // Only modify a field already supplied by the server; never synthesize image URLs.
+  for (const imageKey of ['images_list', 'image_list']) {
+    const images = note[imageKey];
+    if (!Array.isArray(images)) continue;
+    for (const image of images) {
+      if (!obj(image)) continue;
+      if (own(image, 'disable_watermark') && image.disable_watermark !== true) {
+        image.disable_watermark = true;
+        changed = true;
+      }
+      if (obj(image.media_save_config) && image.media_save_config.disable_watermark !== true) {
+        image.media_save_config.disable_watermark = true;
+        changed = true;
+      }
+    }
+  }
   return changed;
 }
 
 function collectNotes(data) {
   const notes = [];
-  const add = (v) => {
-    if (!obj(v)) return;
-    if (Array.isArray(v.note_list)) {
-      for (const note of v.note_list) add(note);
-    } else if (obj(v.note)) {
-      add(v.note);
-    } else if (Array.isArray(v.items)) {
-      for (const note of v.items) add(note);
-    } else {
-      notes.push(v);
+  const visited = new Set();
+  // Recursively inspect only known note wrappers. Do not walk users, comments,
+  // arbitrary metadata, or media URLs, and cap work for unusually large responses.
+  const add = (node, depth = 0) => {
+    if (depth > 9 || visited.size >= 1400) return;
+    if (Array.isArray(node)) {
+      for (const item of node.slice(0, 300)) add(item, depth + 1);
+      return;
+    }
+    if (!obj(node) || visited.has(node)) return;
+    visited.add(node);
+    if (obj(node.media_save_config) || Array.isArray(node.function_switch) ||
+        Array.isArray(node.images_list) || Array.isArray(node.image_list) ||
+        obj(node.video_info_v2) || obj(node.video_info) || obj(node.share_info)) {
+      notes.push(node);
+    }
+    for (const key of ['data', 'note_list', 'notes', 'note', 'items',
+      'item', 'note_data', 'note_info', 'note_card', 'detail']) {
+      if (obj(node[key]) || Array.isArray(node[key])) add(node[key], depth + 1);
     }
   };
-  if (Array.isArray(data)) for (const v of data) add(v);
-  else add(data);
+  add(data);
   return notes;
 }
 
