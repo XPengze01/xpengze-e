@@ -1,6 +1,6 @@
-name: 小红书 Lite V2.1（Egern 原生增强）
-description: 开屏、首页、关注、搜索结果和笔记组件仅清理明确广告；保留图片视频去水印与保存。不删正常搜索结果、购物、直播、聊天和普通推荐。
-author: Custom Lite V2.1 (based on fmz200; references rednote-egern)
+name: 小红书 Lite V2.2（图片保存去水印增强）
+description: 增强嵌套图片保存的禁水印标记，精准处理已知水印资源请求；保留去广告、视频下载与正常内容，不屏蔽普通图片CDN。
+author: Custom Lite V2.2 (based on fmz200; references rednote-egern)
 homepage: https://github.com/XPengze01/xpengze-e
 
 # 只拒绝已知专用广告媒体域名，不拦截通用图片/视频 CDN。
@@ -25,9 +25,23 @@ rules:
       policy: REJECT
 
 # 严格限定可修改的业务接口；搜索仅拦截 /search/notes 的明确广告，不触碰私信、购物或其他搜索服务。
+# 只处理已知的水印配置资源路径，不拦截正常图片 CDN。
+# 参考 RedNote Egern 的水印配置处理方式；iOS 真实接口需验证。
+map_locals:
+  - match: '^https?://ci\.(?:xiaohongshu|rnote)\.com/system_config/watermark(?:/|\?|$)'
+    status_code: 200
+    headers:
+      Content-Type: image/gif
+    body: ""
+  - match: '^https?://(?:edith|www)\.(?:xiaohongshu|rnote)\.com/api/sns/v1/system(?:/|_)config/watermark(?:/|\?|$)'
+    status_code: 200
+    headers:
+      Content-Type: image/gif
+    body: ""
+
 scriptings:
   - http_response:
-      name: 小红书 Lite V2.1 选择性净化
+      name: 小红书 Lite V2.2 选择性净化
       match: '^https?://(edith|rec|www)\.(xiaohongshu|rnote)\.com/api/sns/(?:v[0-9]+/(?:system_service/(?:splash_config|splash_async_optimization|splash_online_decision)|homefeed|followfeed|user/followings/followfeed|note/(?:imagefeed|feed|videofeed|detailfeed(?:/preload)?|widgets|comment/(?:list|sub_comments)|live_photo/save|video/save))|v1/interaction/comment/video/download)(?:/?(?:[?#]|$))'
       script_url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/Xiaohongshu-Lite-V2-Egern/Xiaohongshu-Lite-V2.js
       update_interval: 3600
@@ -36,7 +50,7 @@ scriptings:
       max_size: 8388608
 
   - http_response:
-      name: 小红书 Lite V2.1 搜索结果明确广告
+      name: 小红书 Lite V2.2 搜索结果明确广告
       match: '^https?://(?:edith|so|search)\.(?:xiaohongshu|rnote)\.com/api/sns/v[0-9]+/search/notes(?:/?(?:[?#]|$))'
       script_url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/Xiaohongshu-Lite-V2-Egern/Xiaohongshu-Lite-V2.js
       update_interval: 3600
@@ -57,3 +71,5 @@ mitm:
       - search.xiaohongshu.com
       - so.rnote.com
       - search.rnote.com
+      - ci.xiaohongshu.com
+      - ci.rnote.com
