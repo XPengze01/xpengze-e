@@ -1,14 +1,15 @@
 /**
- * 小红书 / RedNote Lite V2.4 — Egern 原生响应脚本
+ * 小红书 / RedNote Lite V2.5 — Egern 原生响应脚本
  * 目标：开屏、明确标记的首页/关注/搜索/视频/评论与笔记组件广告、图片与视频保存。
  * V2.2: 递归识别笔记包装层，覆盖图片保存禁水印设置；资源级水印由 YAML 精准处理。
  * V2.3: 仅在评论响应中修正 /comment/ 图片 URL 的水印图像处理参数；保护签名链接。
  * V2.4: 修正评论静态图片保存标记、已知水印素材配置，并兼容更多图文笔记入口。
+ * V2.5: 对齐 fmz200 评论红号替换行为；透明水印资源改由 Egern 原生 reject-img 返回。
  * 搜索仅移除明确广告条目；不清理普通搜索、商品/直播、音乐、地点、个人页或聊天。
  * 参考：fmz200/wool_scripts、patrickyanxxxxx/rednote-egern（功能思路）
  * 更新须人工确认；出现异常时保留原始响应，避免影响浏览。
  */
-const VERSION = '2.4.0';
+const VERSION = '2.5.0';
 const VIDEO_KEY = 'xhs_lite_v2_video_urls';
 const LIVE_KEY = 'xhs_lite_v2_live_urls';
 const COMMENT_KEY = 'xhs_lite_v2_comment_urls';
@@ -140,6 +141,29 @@ function rewriteCommentPictures(node, depth = 0, count = { visited: 0 }) {
   return changed;
 }
 
+
+// Match fmz200's comment-only red_id handling to suppress app-added ID watermark.
+// Keep existing user_id/id/nickname intact for profile navigation and display.
+function hideCommentRedId(node, depth = 0, count = { n: 0 }) {
+  if (!node || typeof node !== 'object' || depth > 12 || count.n > 2500) return false;
+  count.n++;
+  let changed = false;
+  if (Array.isArray(node)) {
+    for (const item of node) changed = hideCommentRedId(item, depth + 1, count) || changed;
+    return changed;
+  }
+  if (own(node, 'red_id')) {
+    if (!own(node, 'fmz200')) node.fmz200 = node.red_id;
+    delete node.red_id;
+    changed = true;
+  }
+  for (const value of Object.values(node)) {
+    if (value && typeof value === 'object') {
+      changed = hideCommentRedId(value, depth + 1, count) || changed;
+    }
+  }
+  return changed;
+}
 
 function repairStaticCommentSaveFlags(data) {
   let changed = false;
@@ -417,6 +441,8 @@ export default async function(ctx) {
       mergeCache(ctx, COMMENT_KEY, extractCommentVideos(root.data));
       changed = repairStaticCommentSaveFlags(root.data) || changed;
       changed = rewriteCommentPictures(root.data) || changed;
+      // fmz200 approach: hide red_id from comments and nested replies only.
+      changed = hideCommentRedId(root.data) || changed;
     } else if (/\/v\d+\/note\/video\/save\/?$/.test(path)) {
       const id = root.data?.note_id;
       const url = id && readJSON(ctx, VIDEO_KEY)[String(id)];
