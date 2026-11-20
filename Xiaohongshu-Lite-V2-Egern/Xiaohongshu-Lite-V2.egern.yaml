@@ -55,7 +55,7 @@ scriptings:
 
   - http_response:
       name: 小红书 Lite V2.6 广告资源与视频广告
-      match: '^https?://(?:edith|www)\\.(?:xiaohongshu|rnote)\\.com/api/sns/v[0-9]+/(?:ads/resource|tag/ads_engage|content/video/get_ads_info)(?:/?(?:[?#]|$))'
+      match: '^https?://(?:edith|www)\.(?:xiaohongshu|rnote)\.com/api/sns/v[0-9]+/(?:ads/resource|tag/ads_engage|content/video/get_ads_info)(?:/?(?:[?#]|$))'
       script_url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/Xiaohongshu-Lite-V2-Egern/Xiaohongshu-Lite-V2.js
       update_interval: 3600
       timeout: 15
@@ -64,7 +64,7 @@ scriptings:
 
   - http_response:
       name: 小红书 Lite V2.6 消息页商业与活动推广
-      match: '^https?://(?:edith|www)\\.(?:xiaohongshu|rnote)\\.com/api/sns/v[0-9]+/message/detect(?:/?(?:[?#]|$))'
+      match: '^https?://(?:edith|www)\.(?:xiaohongshu|rnote)\.com/api/sns/v[0-9]+/message/detect(?:/?(?:[?#]|$))'
       script_url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/Xiaohongshu-Lite-V2-Egern/Xiaohongshu-Lite-V2.js
       update_interval: 3600
       timeout: 15
@@ -73,7 +73,7 @@ scriptings:
 
   - http_response:
       name: 小红书 Lite V2.6 私信推广横幅
-      match: '^https?://(?:edith|www)\\.(?:xiaohongshu|rnote)\\.com/api/im/v[0-9]+/get_banner_list(?:/?(?:[?#]|$))'
+      match: '^https?://(?:edith|www)\.(?:xiaohongshu|rnote)\.com/api/im/v[0-9]+/get_banner_list(?:/?(?:[?#]|$))'
       script_url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/Xiaohongshu-Lite-V2-Egern/Xiaohongshu-Lite-V2.js
       update_interval: 3600
       timeout: 15
