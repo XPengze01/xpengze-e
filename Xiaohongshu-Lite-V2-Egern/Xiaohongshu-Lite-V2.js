@@ -1,13 +1,14 @@
 /**
- * 小红书 / RedNote Lite V2.3 — Egern 原生响应脚本
+ * 小红书 / RedNote Lite V2.4 — Egern 原生响应脚本
  * 目标：开屏、明确标记的首页/关注/搜索/视频/评论与笔记组件广告、图片与视频保存。
  * V2.2: 递归识别笔记包装层，覆盖图片保存禁水印设置；资源级水印由 YAML 精准处理。
  * V2.3: 仅在评论响应中修正 /comment/ 图片 URL 的水印图像处理参数；保护签名链接。
+ * V2.4: 修正评论静态图片保存标记、已知水印素材配置，并兼容更多图文笔记入口。
  * 搜索仅移除明确广告条目；不清理普通搜索、商品/直播、音乐、地点、个人页或聊天。
  * 参考：fmz200/wool_scripts、patrickyanxxxxx/rednote-egern（功能思路）
  * 更新须人工确认；出现异常时保留原始响应，避免影响浏览。
  */
-const VERSION = '2.3.0';
+const VERSION = '2.4.0';
 const VIDEO_KEY = 'xhs_lite_v2_video_urls';
 const LIVE_KEY = 'xhs_lite_v2_live_urls';
 const COMMENT_KEY = 'xhs_lite_v2_comment_urls';
@@ -136,6 +137,50 @@ function rewriteCommentPictures(node, depth = 0, count = { visited: 0 }) {
       changed = rewriteCommentPictures(value, depth + 1, count) || changed;
     }
   }
+  return changed;
+}
+
+
+function repairStaticCommentSaveFlags(data) {
+  let changed = false;
+  const seen = new Set();
+  function visit(node, depth = 0) {
+    if (!node || typeof node !== 'object' || depth > 8 ||
+        seen.size > 1500 || seen.has(node)) return;
+    seen.add(node);
+    if (Array.isArray(node)) {
+      for (const item of node) visit(item, depth + 1);
+      return;
+    }
+    if (Array.isArray(node.pictures) && node.pictures.some(obj)) {
+      // Handle static image/sticker comments only, never text-only or video-only.
+      if (node.comment_type === 3) { node.comment_type = 2; changed = true; }
+      if (node.media_source_type === 1) { node.media_source_type = 0; changed = true; }
+      if (obj(node.media_save_config)) {
+        for (const [key, value] of Object.entries({
+          disable_save: false, disable_watermark: true, disable_weibo_cover: true
+        })) {
+          if (node.media_save_config[key] !== value) {
+            node.media_save_config[key] = value;
+            changed = true;
+          }
+        }
+      }
+      for (const pic of node.pictures) {
+        if (!obj(pic)) continue;
+        if (own(pic, 'disable_watermark') && pic.disable_watermark !== true) {
+          pic.disable_watermark = true; changed = true;
+        }
+        if (obj(pic.media_save_config) && pic.media_save_config.disable_watermark !== true) {
+          pic.media_save_config.disable_watermark = true; changed = true;
+        }
+      }
+    }
+    for (const key of ['data', 'comments', 'sub_comments', 'items', 'replies']) {
+      if (node[key] && typeof node[key] === 'object') visit(node[key], depth + 1);
+    }
+  }
+  visit(data);
   return changed;
 }
 
@@ -345,7 +390,9 @@ export default async function(ctx) {
       changed = cleanSplash(root, path);
     } else if (/\/v\d+\/(?:homefeed|followfeed|user\/followings\/followfeed)\/?$/.test(path)) {
       changed = filterKnownLists(root.data);
-    } else if (/\/v\d+\/note\/(?:imagefeed|feed|videofeed|detailfeed(?:\/preload)?)\/?$/.test(path)) {
+      // Apply media-save flags to existing note metadata, including seller posts.
+      for (const note of collectNotes(root.data)) changed = enableSave(note) || changed;
+    } else if (/\/v\d+\/note\/(?:imagefeed|feed|tabfeed|redtube|videofeed|detailfeed(?:\/preload)?)\/?$/.test(path)) {
       // 视频流也需要过滤明确标记的广告，其余商品/直播正常保留。
       if (/\/note\/videofeed\/?$/.test(path)) changed = filterKnownLists(root.data);
       const notes = collectNotes(root.data);
@@ -353,6 +400,11 @@ export default async function(ctx) {
       const caches = extractDownloadCaches(notes);
       mergeCache(ctx, VIDEO_KEY, caches.videos);
       mergeCache(ctx, LIVE_KEY, caches.lives);
+    } else if (/\/v\d+\/system_service\/config\/?$/.test(path)) {
+      // Only suppress this known watermark overlay asset path.
+      if (obj(root.data) && own(root.data, 'watermark_pic_path')) {
+        delete root.data.watermark_pic_path; changed = true;
+      }
     } else if (/\/v\d+\/search\/notes\/?$/.test(path)) {
       // Keep non-ad results, including genuine live/product/user entries.
       changed = filterKnownLists(root.data);
@@ -363,6 +415,7 @@ export default async function(ctx) {
       changed = filterComments(root.data);
       // Capture video URLs as before, then remove image watermark URL queries.
       mergeCache(ctx, COMMENT_KEY, extractCommentVideos(root.data));
+      changed = repairStaticCommentSaveFlags(root.data) || changed;
       changed = rewriteCommentPictures(root.data) || changed;
     } else if (/\/v\d+\/note\/video\/save\/?$/.test(path)) {
       const id = root.data?.note_id;
