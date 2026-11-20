@@ -1,0 +1,478 @@
+/**
+ * 小红书 / RedNote Lite V2.5 — Egern 原生响应脚本
+ * 目标：开屏、明确标记的首页/关注/搜索/视频/评论与笔记组件广告、图片与视频保存。
+ * V2.2: 递归识别笔记包装层，覆盖图片保存禁水印设置；资源级水印由 YAML 精准处理。
+ * V2.3: 仅在评论响应中修正 /comment/ 图片 URL 的水印图像处理参数；保护签名链接。
+ * V2.4: 修正评论静态图片保存标记、已知水印素材配置，并兼容更多图文笔记入口。
+ * V2.5: 对齐 fmz200 评论红号替换行为；透明水印资源改由 Egern 原生 reject-img 返回。
+ * 搜索仅移除明确广告条目；不清理普通搜索、商品/直播、音乐、地点、个人页或聊天。
+ * 参考：fmz200/wool_scripts、patrickyanxxxxx/rednote-egern（功能思路）
+ * 更新须人工确认；出现异常时保留原始响应，避免影响浏览。
+ */
+const VERSION = '2.5.0';
+const VIDEO_KEY = 'xhs_lite_v2_video_urls';
+const LIVE_KEY = 'xhs_lite_v2_live_urls';
+const COMMENT_KEY = 'xhs_lite_v2_comment_urls';
+const AD_MODELS = new Set([
+  'ad', 'ads', 'advertisement', 'commercial', 'sponsor', 'sponsored',
+  'promoted_note', 'brand_ad', 'feed_ad', 'native_ad'
+]);
+
+function obj(v) { return v !== null && typeof v === 'object' && !Array.isArray(v); }
+function flag(v) { return v === true || v === 1 || v === '1' || v === 'true'; }
+function own(o, key) { return Object.prototype.hasOwnProperty.call(o, key); }
+function isAd(item) {
+  if (!obj(item)) return false;
+  for (const key of ['is_ad', 'is_ads', 'is_sponsored', 'sponsored', 'promoted']) {
+    if (flag(item[key])) return true;
+  }
+  // 广告专用描述块存在即视为广告；空对象也是已知广告返回形式。
+  for (const key of ['ads_info', 'ad_info', 'advertisement_info']) {
+    if (own(item, key) && item[key] !== null && item[key] !== false) return true;
+  }
+  for (const key of ['model_type', 'card_type', 'item_type', 'display_type']) {
+    const v = item[key];
+    if (typeof v === 'string' && AD_MODELS.has(v.toLowerCase())) return true;
+  }
+  const reason = item.recommend_reason || item.recommend_type;
+  return typeof reason === 'string' && /(?:^|[_-])(?:ad|ads|sponsor|sponsored|commercial)(?:[_-]|$)/i.test(reason);
+}
+
+function filterAds(items) {
+  if (!Array.isArray(items)) return false;
+  const original = items.length;
+  for (let i = items.length - 1; i >= 0; i--) {
+    if (isAd(items[i])) items.splice(i, 1);
+  }
+  return items.length !== original;
+}
+function filterKnownLists(data) {
+  if (Array.isArray(data)) return filterAds(data);
+  if (!obj(data)) return false;
+  let changed = false;
+  for (const key of ['items', 'notes', 'cards']) {
+    if (Array.isArray(data[key])) changed = filterAds(data[key]) || changed;
+  }
+  return changed;
+}
+// Note widgets: remove explicitly advertising components, never generic widgets.
+const WIDGET_AD_KEYS = new Set([
+  'ads_goods_cards', 'ads_comment_component', 'ads_engage_bar',
+  'pgy_comment_component', 'pgy_engage_bar'
+]);
+const WIDGET_CHILD_KEYS = new Set([
+  'data', 'generic', 'widget_list', 'widgets', 'items',
+  'cards', 'components', 'sections', 'groups'
+]);
+function filterWidgetAds(node, depth = 0) {
+  if (depth > 6) return false;
+  if (Array.isArray(node)) {
+    const changed = filterAds(node);
+    let nested = false;
+    for (const item of node) nested = filterWidgetAds(item, depth + 1) || nested;
+    return changed || nested;
+  }
+  if (!obj(node)) return false;
+  let changed = false;
+  for (const key of Object.keys(node)) {
+    if (WIDGET_AD_KEYS.has(key)) {
+      delete node[key];
+      changed = true;
+    } else if (key === 'second_jump_bar' &&
+      obj(node[key]) && (node[key].type === 'ads' || node[key].model_type === 'ads')) {
+      delete node[key];
+      changed = true;
+    } else if (WIDGET_CHILD_KEYS.has(key)) {
+      changed = filterWidgetAds(node[key], depth + 1) || changed;
+    }
+  }
+  return changed;
+}
+
+
+// Comment images differ from note images: their picture URLs can include
+// watermark/transformation queries. Strip those only for /comment/ media on
+// recognised RedNote media hosts; never rewrite arbitrary CDN or signed URLs.
+function stripCommentImageUrl(value) {
+  if (typeof value !== 'string' || !value.includes('?')) return value;
+  let url;
+  try { url = new URL(value); } catch (_) { return value; }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return value;
+  const host = url.hostname.toLowerCase();
+  const trusted = ['xhscdn.com', 'xiaohongshu.com', 'rnote.com'];
+  if (!trusted.some(d => host === d || host.endsWith('.' + d))) return value;
+  if (!url.pathname.includes('/comment/')) return value;
+  // Signed links may require their query to be valid and must be preserved.
+  if (/(?:^|&)(?:sign|signature|token|auth_key|expires|expiration|policy|x-sign|x-oss-[^=&]*|x-amz-[^=&]*)(?:=|&|$)/i.test(url.search.slice(1))) return value;
+  return value.slice(0, value.indexOf('?')) + url.hash;
+}
+function rewriteCommentPictures(node, depth = 0, count = { visited: 0 }) {
+  if (!node || typeof node !== 'object' || depth > 8 || count.visited >= 1800) return false;
+  count.visited++;
+  if (Array.isArray(node)) {
+    let changed = false;
+    for (const item of node) changed = rewriteCommentPictures(item, depth + 1, count) || changed;
+    return changed;
+  }
+  let changed = false;
+  if (Array.isArray(node.pictures)) {
+    for (const image of node.pictures) {
+      if (!obj(image)) continue;
+      for (const key of ['url', 'origin_url']) {
+        const next = stripCommentImageUrl(image[key]);
+        if (next !== image[key]) { image[key] = next; changed = true; }
+      }
+      if (obj(image.meme_package)) {
+        const next = stripCommentImageUrl(image.meme_package.image_url);
+        if (next !== image.meme_package.image_url) {
+          image.meme_package.image_url = next;
+          changed = true;
+        }
+      }
+    }
+  }
+  // Traverse comment response wrappers without touching any non-picture fields.
+  for (const [key, value] of Object.entries(node)) {
+    if (key === 'pictures') continue;
+    if (value && typeof value === 'object') {
+      changed = rewriteCommentPictures(value, depth + 1, count) || changed;
+    }
+  }
+  return changed;
+}
+
+
+// Match fmz200's comment-only red_id handling to suppress app-added ID watermark.
+// Keep existing user_id/id/nickname intact for profile navigation and display.
+function hideCommentRedId(node, depth = 0, count = { n: 0 }) {
+  if (!node || typeof node !== 'object' || depth > 12 || count.n > 2500) return false;
+  count.n++;
+  let changed = false;
+  if (Array.isArray(node)) {
+    for (const item of node) changed = hideCommentRedId(item, depth + 1, count) || changed;
+    return changed;
+  }
+  if (own(node, 'red_id')) {
+    if (!own(node, 'fmz200')) node.fmz200 = node.red_id;
+    delete node.red_id;
+    changed = true;
+  }
+  for (const value of Object.values(node)) {
+    if (value && typeof value === 'object') {
+      changed = hideCommentRedId(value, depth + 1, count) || changed;
+    }
+  }
+  return changed;
+}
+
+function repairStaticCommentSaveFlags(data) {
+  let changed = false;
+  const seen = new Set();
+  function visit(node, depth = 0) {
+    if (!node || typeof node !== 'object' || depth > 8 ||
+        seen.size > 1500 || seen.has(node)) return;
+    seen.add(node);
+    if (Array.isArray(node)) {
+      for (const item of node) visit(item, depth + 1);
+      return;
+    }
+    if (Array.isArray(node.pictures) && node.pictures.some(obj)) {
+      // Handle static image/sticker comments only, never text-only or video-only.
+      if (node.comment_type === 3) { node.comment_type = 2; changed = true; }
+      if (node.media_source_type === 1) { node.media_source_type = 0; changed = true; }
+      if (obj(node.media_save_config)) {
+        for (const [key, value] of Object.entries({
+          disable_save: false, disable_watermark: true, disable_weibo_cover: true
+        })) {
+          if (node.media_save_config[key] !== value) {
+            node.media_save_config[key] = value;
+            changed = true;
+          }
+        }
+      }
+      for (const pic of node.pictures) {
+        if (!obj(pic)) continue;
+        if (own(pic, 'disable_watermark') && pic.disable_watermark !== true) {
+          pic.disable_watermark = true; changed = true;
+        }
+        if (obj(pic.media_save_config) && pic.media_save_config.disable_watermark !== true) {
+          pic.media_save_config.disable_watermark = true; changed = true;
+        }
+      }
+    }
+    for (const key of ['data', 'comments', 'sub_comments', 'items', 'replies']) {
+      if (node[key] && typeof node[key] === 'object') visit(node[key], depth + 1);
+    }
+  }
+  visit(data);
+  return changed;
+}
+
+function filterComments(data) {
+  if (!obj(data) || !Array.isArray(data.comments)) return false;
+  let changed = filterAds(data.comments);
+  for (const comment of data.comments) {
+    if (obj(comment) && Array.isArray(comment.sub_comments)) {
+      changed = filterAds(comment.sub_comments) || changed;
+    }
+  }
+  return changed;
+}
+
+function enableSave(note) {
+  if (!obj(note)) return false;
+  let changed = false;
+  const settings = note.media_save_config;
+  if (obj(settings)) {
+    const values = {
+      disable_save: false,
+      disable_watermark: true,
+      disable_weibo_cover: true
+    };
+    for (const [key, value] of Object.entries(values)) {
+      if (settings[key] !== value) { settings[key] = value; changed = true; }
+    }
+  }
+  if (Array.isArray(note.function_switch)) {
+    for (const entry of note.function_switch) {
+      if (obj(entry) && (entry.type === 'image_download' || entry.type === 'video_download')) {
+        if (entry.enable !== true) { entry.enable = true; changed = true; }
+        if (own(entry, 'reason')) { delete entry.reason; changed = true; }
+      }
+    }
+  }
+  // 仅在确实有视频的笔记里补视频保存入口；不改图片笔记的分享菜单。
+  const videoNote = obj(note.video_info_v2) || obj(note.video_info) ||
+    note.type === 'video' || note.note_type === 'video';
+  const entries = note.share_info?.function_entries;
+  if (videoNote && Array.isArray(entries) &&
+      !entries.some(e => obj(e) && e.type === 'video_download')) {
+    entries.push({ type: 'video_download' });
+    changed = true;
+  }
+  // Some image beans carry their own saved-watermark flag, independent of the note.
+  // Only modify a field already supplied by the server; never synthesize image URLs.
+  for (const imageKey of ['images_list', 'image_list']) {
+    const images = note[imageKey];
+    if (!Array.isArray(images)) continue;
+    for (const image of images) {
+      if (!obj(image)) continue;
+      if (own(image, 'disable_watermark') && image.disable_watermark !== true) {
+        image.disable_watermark = true;
+        changed = true;
+      }
+      if (obj(image.media_save_config) && image.media_save_config.disable_watermark !== true) {
+        image.media_save_config.disable_watermark = true;
+        changed = true;
+      }
+    }
+  }
+  return changed;
+}
+
+function collectNotes(data) {
+  const notes = [];
+  const visited = new Set();
+  // Recursively inspect only known note wrappers. Do not walk users, comments,
+  // arbitrary metadata, or media URLs, and cap work for unusually large responses.
+  const add = (node, depth = 0) => {
+    if (depth > 9 || visited.size >= 1400) return;
+    if (Array.isArray(node)) {
+      for (const item of node.slice(0, 300)) add(item, depth + 1);
+      return;
+    }
+    if (!obj(node) || visited.has(node)) return;
+    visited.add(node);
+    if (obj(node.media_save_config) || Array.isArray(node.function_switch) ||
+        Array.isArray(node.images_list) || Array.isArray(node.image_list) ||
+        obj(node.video_info_v2) || obj(node.video_info) || obj(node.share_info)) {
+      notes.push(node);
+    }
+    for (const key of ['data', 'note_list', 'notes', 'note', 'items',
+      'item', 'note_data', 'note_info', 'note_card', 'detail']) {
+      if (obj(node[key]) || Array.isArray(node[key])) add(node[key], depth + 1);
+    }
+  };
+  add(data);
+  return notes;
+}
+
+function bestStream(media) {
+  if (!obj(media)) return null;
+  const s = media.stream || media.media?.stream;
+  // 只读取服务端已提供的视频地址，不修改播放清晰度或编码。
+  for (const arr of [s?.h265, s?.h264]) {
+    if (!Array.isArray(arr)) continue;
+    for (const variant of arr) {
+      if (typeof variant?.master_url === 'string' && /^https?:\/\//.test(variant.master_url)) {
+        return variant.master_url;
+      }
+    }
+  }
+  return null;
+}
+function readJSON(ctx, key) {
+  try {
+    if (typeof ctx.storage?.getJSON === 'function') return ctx.storage.getJSON(key) || {};
+    return JSON.parse(ctx.storage?.get(key) || '{}');
+  } catch (_) { return {}; }
+}
+function mergeCache(ctx, key, additions) {
+  if (!obj(additions) || !Object.keys(additions).length) return;
+  try {
+    const combined = { ...readJSON(ctx, key), ...additions };
+    const recent = Object.entries(combined).slice(-100);
+    const out = Object.fromEntries(recent);
+    if (typeof ctx.storage?.setJSON === 'function') ctx.storage.setJSON(key, out);
+    else ctx.storage?.set(key, JSON.stringify(out));
+  } catch (_) { /* 本地存储失败不影响阅读 */ }
+}
+
+function cleanSplash(root, path) {
+  const data = root.data;
+  if (!obj(data)) return false;
+  let changed = false;
+  if (path.endsWith('/splash_config')) {
+    for (const key of ['ads_groups', 'bidding_ads', 'splash_ads']) {
+      if (Array.isArray(data[key]) && data[key].length) { data[key] = []; changed = true; }
+    }
+    if (own(data, 'per_day_max_show') && data.per_day_max_show !== 0) {
+      data.per_day_max_show = 0; changed = true;
+    }
+  } else {
+    // 只改已知的开屏广告/跟踪字段，不生成虚假的整体响应结构。
+    for (const key of ['ads_groups', 'bidding_ads', 'ads', 'dspList']) {
+      if (Array.isArray(data[key]) && data[key].length) { data[key] = []; changed = true; }
+    }
+    for (const key of ['track_url', 'track_id', 'request_id']) {
+      if (own(data, key) && data[key] !== '') { data[key] = ''; changed = true; }
+    }
+    if (own(data, 'ads_id') && data.ads_id !== '-1') { data.ads_id = '-1'; changed = true; }
+  }
+  return changed;
+}
+
+function extractDownloadCaches(notes) {
+  const videos = {}, lives = {};
+  for (const note of notes) {
+    const id = note.id || note.note_id;
+    const url = bestStream(note.video_info_v2) || bestStream(note.video_info);
+    if (id && url) videos[String(id)] = url;
+    const images = Array.isArray(note.images_list) ? note.images_list :
+      Array.isArray(note.image_list) ? note.image_list : [];
+    for (const picture of images) {
+      const fileId = picture?.live_photo_file_id || picture?.live_photo?.file_id;
+      const liveUrl = bestStream(picture?.live_photo);
+      if (fileId && liveUrl) lives[String(fileId)] = liveUrl;
+    }
+  }
+  return { videos, lives };
+}
+function extractCommentVideos(data) {
+  const cache = {};
+  const comments = Array.isArray(data?.comments) ? data.comments : [];
+  for (const comment of comments) {
+    const nested = [comment, ...(Array.isArray(comment?.sub_comments) ? comment.sub_comments : [])];
+    for (const entry of nested) {
+      for (const prop of ['pictures', 'videos']) {
+        const parts = Array.isArray(entry?.[prop]) ? entry[prop] : [];
+        for (const media of parts) {
+          const id = media?.video_id;
+          let info = media?.video_info;
+          if (typeof info === 'string') {
+            try { info = JSON.parse(info); } catch (_) { info = null; }
+          }
+          const url = bestStream(info);
+          if (id && url) cache[String(id)] = url;
+        }
+      }
+    }
+  }
+  return cache;
+}
+
+export default async function(ctx) {
+  if (!ctx?.request?.url || !ctx.response) return;
+  let raw;
+  try { raw = await ctx.response.text(); }
+  catch (_) { return; }
+  if (!raw) return { body: raw };
+
+  let root, path;
+  try {
+    root = JSON.parse(raw);
+    path = new URL(ctx.request.url).pathname;
+  } catch (_) { return { body: raw }; }
+  if (!obj(root)) return { body: raw };
+  // 不改服务器明确返回错误的响应。
+  if (root.success === false || (typeof root.code === 'number' && root.code !== 0)) {
+    return { body: raw };
+  }
+  let changed = false;
+  try {
+    if (/\/system_service\/(?:splash_config|splash_async_optimization|splash_online_decision)\/?$/.test(path)) {
+      changed = cleanSplash(root, path);
+    } else if (/\/v\d+\/(?:homefeed|followfeed|user\/followings\/followfeed)\/?$/.test(path)) {
+      changed = filterKnownLists(root.data);
+      // Apply media-save flags to existing note metadata, including seller posts.
+      for (const note of collectNotes(root.data)) changed = enableSave(note) || changed;
+    } else if (/\/v\d+\/note\/(?:imagefeed|feed|tabfeed|redtube|videofeed|detailfeed(?:\/preload)?)\/?$/.test(path)) {
+      // 视频流也需要过滤明确标记的广告，其余商品/直播正常保留。
+      if (/\/note\/videofeed\/?$/.test(path)) changed = filterKnownLists(root.data);
+      const notes = collectNotes(root.data);
+      for (const note of notes) changed = enableSave(note) || changed;
+      const caches = extractDownloadCaches(notes);
+      mergeCache(ctx, VIDEO_KEY, caches.videos);
+      mergeCache(ctx, LIVE_KEY, caches.lives);
+    } else if (/\/v\d+\/system_service\/config\/?$/.test(path)) {
+      // Only suppress this known watermark overlay asset path.
+      if (obj(root.data) && own(root.data, 'watermark_pic_path')) {
+        delete root.data.watermark_pic_path; changed = true;
+      }
+    } else if (/\/v\d+\/search\/notes\/?$/.test(path)) {
+      // Keep non-ad results, including genuine live/product/user entries.
+      changed = filterKnownLists(root.data);
+    } else if (/\/v\d+\/note\/widgets\/?$/.test(path)) {
+      // Only explicit ad widget keys/items; no blanket widget or search removal.
+      changed = filterWidgetAds(root.data);
+    } else if (/\/v\d+\/note\/comment\/(?:list|sub_comments)\/?$/.test(path)) {
+      changed = filterComments(root.data);
+      // Capture video URLs as before, then remove image watermark URL queries.
+      mergeCache(ctx, COMMENT_KEY, extractCommentVideos(root.data));
+      changed = repairStaticCommentSaveFlags(root.data) || changed;
+      changed = rewriteCommentPictures(root.data) || changed;
+      // fmz200 approach: hide red_id from comments and nested replies only.
+      changed = hideCommentRedId(root.data) || changed;
+    } else if (/\/v\d+\/note\/video\/save\/?$/.test(path)) {
+      const id = root.data?.note_id;
+      const url = id && readJSON(ctx, VIDEO_KEY)[String(id)];
+      if (url && obj(root.data)) {
+        if (root.data.download_url !== url) { root.data.download_url = url; changed = true; }
+        if (root.data.disable === true) {
+          delete root.data.disable;
+          delete root.data.msg;
+          root.data.status = 2;
+          changed = true;
+        }
+      }
+    } else if (/\/v\d+\/note\/live_photo\/save\/?$/.test(path)) {
+      const cache = readJSON(ctx, LIVE_KEY);
+      if (Array.isArray(root.data?.datas)) {
+        for (const media of root.data.datas) {
+          const url = cache[String(media?.file_id)];
+          if (url && media.url !== url) { media.url = url; changed = true; }
+        }
+      }
+    } else if (/\/v1\/interaction\/comment\/video\/download\/?$/.test(path)) {
+      const id = root.data?.video?.video_id;
+      const url = id && readJSON(ctx, COMMENT_KEY)[String(id)];
+      if (url && root.data.video.video_url !== url) {
+        root.data.video.video_url = url;
+        changed = true;
+      }
+    }
+    return { body: changed ? JSON.stringify(root) : raw };
+  } catch (_) {
+    return { body: raw };
+  }
+}

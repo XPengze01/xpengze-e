@@ -1,15 +1,16 @@
 /**
- * 小红书 / RedNote Lite V2.5 — Egern 原生响应脚本
+ * 小红书 / RedNote Lite V2.6 — Egern 原生响应脚本
  * 目标：开屏、明确标记的首页/关注/搜索/视频/评论与笔记组件广告、图片与视频保存。
  * V2.2: 递归识别笔记包装层，覆盖图片保存禁水印设置；资源级水印由 YAML 精准处理。
  * V2.3: 仅在评论响应中修正 /comment/ 图片 URL 的水印图像处理参数；保护签名链接。
  * V2.4: 修正评论静态图片保存标记、已知水印素材配置，并兼容更多图文笔记入口。
  * V2.5: 对齐 fmz200 评论红号替换行为；透明水印资源改由 Egern 原生 reject-img 返回。
+ * V2.6: 定向清理广告资源、视频广告信息、消息推广及搜索/私信推广横幅。
  * 搜索仅移除明确广告条目；不清理普通搜索、商品/直播、音乐、地点、个人页或聊天。
  * 参考：fmz200/wool_scripts、patrickyanxxxxx/rednote-egern（功能思路）
  * 更新须人工确认；出现异常时保留原始响应，避免影响浏览。
  */
-const VERSION = '2.5.0';
+const VERSION = '2.6.0';
 const VIDEO_KEY = 'xhs_lite_v2_video_urls';
 const LIVE_KEY = 'xhs_lite_v2_live_urls';
 const COMMENT_KEY = 'xhs_lite_v2_comment_urls';
@@ -352,6 +353,67 @@ function cleanSplash(root, path) {
   return changed;
 }
 
+
+// Dedicated ad endpoints: keep the response envelope and existing value types.
+// Unknown fields pass through until a real response confirms their meaning.
+function clearAdFields(data) {
+  if (Array.isArray(data)) {
+    if (!data.length) return false;
+    data.length = 0;
+    return true;
+  }
+  if (!obj(data)) return false;
+  let changed = false;
+  for (const key of ['ads', 'ads_list', 'ad_list', 'ads_groups', 'bidding_ads',
+    'resources', 'resource_list', 'items', 'tag_ads', 'engage_ads',
+    'video_ads', 'video_ads_info', 'ads_info']) {
+    if (Array.isArray(data[key]) && data[key].length) {
+      data[key] = [];
+      changed = true;
+    } else if (obj(data[key]) && Object.keys(data[key]).length) {
+      data[key] = {};
+      changed = true;
+    }
+  }
+  return changed;
+}
+function clearBannerLists(data) {
+  if (!obj(data)) return false;
+  let changed = false;
+  for (const key of ['banner_info_list', 'banner_list', 'banners', 'items']) {
+    if (Array.isArray(data[key]) && data[key].length) {
+      data[key] = [];
+      changed = true;
+    }
+  }
+  return changed;
+}
+function clearMessagePromotions(data) {
+  if (!obj(data)) return false;
+  let changed = false;
+  for (const key of ['subNotificationCommercial', 'subNotificationEvent']) {
+    const section = data[key];
+    if (!obj(section)) continue;
+    for (const countKey of ['count', 'count_type']) {
+      if (own(section, countKey) && section[countKey] !== 0) {
+        section[countKey] = 0;
+        changed = true;
+      }
+    }
+    if (obj(section.latest)) {
+      if (own(section.latest, 'title') && section.latest.title !== '') {
+        section.latest.title = '';
+        changed = true;
+      }
+      if (own(section.latest, 'time') && section.latest.time !== -1) {
+        section.latest.time = -1;
+        changed = true;
+      }
+    }
+  }
+  return changed;
+}
+
 function extractDownloadCaches(notes) {
   const videos = {}, lives = {};
   for (const note of notes) {
@@ -429,6 +491,13 @@ export default async function(ctx) {
       if (obj(root.data) && own(root.data, 'watermark_pic_path')) {
         delete root.data.watermark_pic_path; changed = true;
       }
+    } else if (/\/v\d+\/(?:ads\/resource|tag\/ads_engage|content\/video\/get_ads_info)\/?$/.test(path)) {
+      changed = clearAdFields(root.data);
+    } else if (/\/v\d+\/message\/detect\/?$/.test(path)) {
+      changed = clearMessagePromotions(root.data);
+    } else if (/\/im\/v\d+\/get_banner_list\/?$/.test(path) ||
+               /\/v\d+\/search\/banner_list\/?$/.test(path)) {
+      changed = clearBannerLists(root.data);
     } else if (/\/v\d+\/search\/notes\/?$/.test(path)) {
       // Keep non-ad results, including genuine live/product/user entries.
       changed = filterKnownLists(root.data);

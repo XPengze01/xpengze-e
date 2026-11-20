@@ -1,6 +1,6 @@
-name: 小红书 Lite V2.5（fmz 评论去水印对齐）
-description: 参考 fmz200 补充评论与楼中楼 red_id 处理；水印素材返回有效 1×1 透明 GIF。保留 V2.4 静态图片、商家图文、去广告及视频规则，不改店铺交易。
-author: Custom Lite V2.5 (fmz200-inspired; references rednote-egern)
+name: 小红书 Lite V2.6（精准去广告增强）
+description: 保留 V2.5 评论 red_id、图片和视频去水印；定向清理明确广告接口、视频广告信息、消息推广与横幅，不改正常搜索、聊天及店铺交易。
+author: Custom Lite V2.6 (fmz200-inspired; references rednote-egern)
 homepage: https://github.com/XPengze01/xpengze-e
 
 # 只拒绝已知专用广告媒体域名，不拦截通用图片/视频 CDN。
@@ -35,7 +35,7 @@ url_rewrites:
 
 scriptings:
   - http_response:
-      name: 小红书 Lite V2.5 选择性净化
+      name: 小红书 Lite V2.6 选择性净化
       match: '^https?://(edith|rec|www)\.(xiaohongshu|rnote)\.com/api/sns/(?:v[0-9]+/(?:system_service/(?:splash_config|splash_async_optimization|splash_online_decision|config)|homefeed|followfeed|user/followings/followfeed|note/(?:imagefeed|feed|tabfeed|redtube|videofeed|detailfeed(?:/preload)?|widgets|comment/(?:list|sub_comments)|live_photo/save|video/save))|v1/interaction/comment/video/download)(?:/?(?:[?#]|$))'
       script_url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/Xiaohongshu-Lite-V2-Egern/Xiaohongshu-Lite-V2.js
       update_interval: 3600
@@ -44,8 +44,36 @@ scriptings:
       max_size: 8388608
 
   - http_response:
-      name: 小红书 Lite V2.5 搜索结果明确广告
-      match: '^https?://(?:edith|so|search)\.(?:xiaohongshu|rnote)\.com/api/sns/v[0-9]+/search/notes(?:/?(?:[?#]|$))'
+      name: 小红书 Lite V2.6 搜索结果与推广横幅
+      match: '^https?://(?:edith|so|search)\.(?:xiaohongshu|rnote)\.com/api/sns/v[0-9]+/search/(?:notes|banner_list)(?:/?(?:[?#]|$))'
+      script_url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/Xiaohongshu-Lite-V2-Egern/Xiaohongshu-Lite-V2.js
+      update_interval: 3600
+      timeout: 15
+      body_required: true
+      max_size: 8388608
+
+
+  - http_response:
+      name: 小红书 Lite V2.6 广告资源与视频广告
+      match: '^https?://(?:edith|www)\\.(?:xiaohongshu|rnote)\\.com/api/sns/v[0-9]+/(?:ads/resource|tag/ads_engage|content/video/get_ads_info)(?:/?(?:[?#]|$))'
+      script_url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/Xiaohongshu-Lite-V2-Egern/Xiaohongshu-Lite-V2.js
+      update_interval: 3600
+      timeout: 15
+      body_required: true
+      max_size: 8388608
+
+  - http_response:
+      name: 小红书 Lite V2.6 消息页商业与活动推广
+      match: '^https?://(?:edith|www)\\.(?:xiaohongshu|rnote)\\.com/api/sns/v[0-9]+/message/detect(?:/?(?:[?#]|$))'
+      script_url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/Xiaohongshu-Lite-V2-Egern/Xiaohongshu-Lite-V2.js
+      update_interval: 3600
+      timeout: 15
+      body_required: true
+      max_size: 8388608
+
+  - http_response:
+      name: 小红书 Lite V2.6 私信推广横幅
+      match: '^https?://(?:edith|www)\\.(?:xiaohongshu|rnote)\\.com/api/im/v[0-9]+/get_banner_list(?:/?(?:[?#]|$))'
       script_url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/Xiaohongshu-Lite-V2-Egern/Xiaohongshu-Lite-V2.js
       update_interval: 3600
       timeout: 15

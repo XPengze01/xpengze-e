@@ -1,0 +1,69 @@
+name: 小红书 Lite V2.5（fmz 评论去水印对齐）
+description: 参考 fmz200 补充评论与楼中楼 red_id 处理；水印素材返回有效 1×1 透明 GIF。保留 V2.4 静态图片、商家图文、去广告及视频规则，不改店铺交易。
+author: Custom Lite V2.5 (fmz200-inspired; references rednote-egern)
+homepage: https://github.com/XPengze01/xpengze-e
+
+# 只拒绝已知专用广告媒体域名，不拦截通用图片/视频 CDN。
+rules:
+  - domain:
+      match: ads-img-qc.xhscdn.com
+      policy: REJECT
+  - domain:
+      match: ads-img-al.xhscdn.com
+      policy: REJECT
+  - domain:
+      match: ads-img-bak.xhscdn.com
+      policy: REJECT
+  - domain:
+      match: ads-video-al.xhscdn.com
+      policy: REJECT
+  - domain:
+      match: ads-video-qc.xhscdn.com
+      policy: REJECT
+  - domain:
+      match: t-ads.xiaohongshu.com
+      policy: REJECT
+
+# 严格限定接口范围：评论去水印只处理评论列表，不触及私信、用户主页、店铺交易。
+# 对齐 fmz200 的 tiny-gif：Egern 官方 http://reject-img/ 返回真正的 1×1 透明 GIF，
+# 避免旧版 map_locals 使用空字节却声明 image/gif 的无效响应。
+url_rewrites:
+  - match: '^https?://ci\.(?:xiaohongshu|rnote)\.com/system_config/watermark(?:/|\?|$)'
+    location: http://reject-img/
+  - match: '^https?://(?:edith|www)\.(?:xiaohongshu|rnote)\.com/api/sns/v1/system(?:/|_)config/watermark(?:/|\?|$)'
+    location: http://reject-img/
+
+scriptings:
+  - http_response:
+      name: 小红书 Lite V2.5 选择性净化
+      match: '^https?://(edith|rec|www)\.(xiaohongshu|rnote)\.com/api/sns/(?:v[0-9]+/(?:system_service/(?:splash_config|splash_async_optimization|splash_online_decision|config)|homefeed|followfeed|user/followings/followfeed|note/(?:imagefeed|feed|tabfeed|redtube|videofeed|detailfeed(?:/preload)?|widgets|comment/(?:list|sub_comments)|live_photo/save|video/save))|v1/interaction/comment/video/download)(?:/?(?:[?#]|$))'
+      script_url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/Xiaohongshu-Lite-V2-Egern/Xiaohongshu-Lite-V2.js
+      update_interval: 3600
+      timeout: 15
+      body_required: true
+      max_size: 8388608
+
+  - http_response:
+      name: 小红书 Lite V2.5 搜索结果明确广告
+      match: '^https?://(?:edith|so|search)\.(?:xiaohongshu|rnote)\.com/api/sns/v[0-9]+/search/notes(?:/?(?:[?#]|$))'
+      script_url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/Xiaohongshu-Lite-V2-Egern/Xiaohongshu-Lite-V2.js
+      update_interval: 3600
+      timeout: 15
+      body_required: true
+      max_size: 8388608
+
+mitm:
+  hostnames:
+    includes:
+      - edith.xiaohongshu.com
+      - rec.xiaohongshu.com
+      - www.xiaohongshu.com
+      - edith.rnote.com
+      - rec.rnote.com
+      - www.rnote.com
+      - so.xiaohongshu.com
+      - search.xiaohongshu.com
+      - so.rnote.com
+      - search.rnote.com
+      - ci.xiaohongshu.com
+      - ci.rnote.com
