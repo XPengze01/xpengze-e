@@ -1,4 +1,4 @@
-// U30 Air Widget 1.2 — Egern medium, fixed white, read-only.
+// U30 Air Widget 1.3 — Egern medium, fixed white, read-only.
 const bytes = s => Array.from(encodeURIComponent(s).replace(/%([0-9A-F]{2})/g,(_,x)=>String.fromCharCode(parseInt(x,16))),c=>c.charCodeAt(0));
 const hex = a => a.map(x=>x.toString(16).padStart(2,'0')).join('');
 const rol=(x,n)=>(x<<n)|(x>>>(32-n));
@@ -47,37 +47,40 @@ function volume(v){
 function rate(v,unit){const n=num(v);return n===null||n<0?'--':volume(unit==='bit'?n/8:n)+'/s'}
 function duration(v){const n=num(v);if(n===null||n<0)return '--';const s=Math.floor(n);return [Math.floor(s/3600),Math.floor(s/60)%60,s%60].map(n=>String(n).padStart(2,'0')).join(':')}
 const localTime=d=>[d.getHours(),d.getMinutes(),d.getSeconds()].map(n=>String(n).padStart(2,'0')).join(':');
-const metric=(label,v)=>col([text(label,9,C.muted,'regular'),text(v,15,C.ink,'medium')],{flex:1,gap:2});
+// White compact native dashboard: typography is the hierarchy, not extra decoration.
+const metric=(label,v)=>col([text(label,10,C.muted,'medium'),text(v,20,C.ink,'medium',{textAlign:'center'})],{flex:1,gap:2});
 function speedLine(symbol,value){
  const m=String(value).match(/^(.+?)\s+(\S+)$/);
- return row([icon(symbol,C.muted,11),text(m?m[1]:value,15,C.ink,'medium'),...(m?[text(m[2],9,C.muted)]:[])],{gap:2});
+ return row([icon(symbol,C.muted,12),text(m?m[1]:value,18,C.ink,'medium'),...(m?[text(m[2],10,C.muted,'regular')]:[])],{gap:3,alignItems:'end'});
 }
 function layout(d,interval,refreshURL){
  const t=d.updated?localTime(new Date(d.updated)):'--:--:--';
  const refresh=icon('arrow.clockwise',C.muted,12,refreshURL?{url:refreshURL}:{});
  const bcolor=d.battery!==null&&d.battery<=20?C.red:C.ink;
  const line1=row([
-   signal(d.bars),text(d.provider,14,C.ink,'semibold'),text(d.mode,11,C.muted,'medium'),text(d.band,11,C.muted,'medium'),space(),
-   icon('thermometer',C.muted,10),text(d.board===null?'--':fmt(d.board,1)+'°C',10,C.muted),
-   battery(d.battery,d.charging),text(d.battery===null?'--':fmt(d.battery)+'%',13,bcolor,'medium')
- ],{gap:3});
- const line2=row([
-   col([speedLine('arrow.up',d.up),speedLine('arrow.down',d.down)],{flex:2.3,alignItems:'start',gap:3}),
-   metric('RSRP',fmt(d.rsrp)),metric('RSRQ',fmt(d.rsrq)),metric('SINR',fmt(d.snr)),metric('PCI',fmt(d.pci))
+   row([signal(d.bars),text(d.provider,14,C.ink,'semibold'),text(d.mode,11,C.muted,'medium'),text(d.band,11,C.muted,'medium')],{gap:4}),
+   space(),
+   row([icon('thermometer',C.muted,10),text(d.board===null?'--':fmt(d.board,1)+'°C',11,C.muted)],{gap:2}),
+   row([battery(d.battery,d.charging),text(d.battery===null?'--':fmt(d.battery)+'%',14,bcolor,'medium')],{gap:2})
  ],{gap:4});
+ const line2=row([
+   col([speedLine('arrow.up',d.up),speedLine('arrow.down',d.down)],{flex:2.55,alignItems:'start',gap:0}),
+   row([metric('RSRP',fmt(d.rsrp)),metric('RSRQ',fmt(d.rsrq)),metric('SINR',fmt(d.snr)),metric('PCI',fmt(d.pci))],{flex:4,gap:2})
+ ],{gap:5});
  const usage=volume(d.today).match(/^(.+?)\s+(\S+)$/);
  const line3=row([
-   row([icon('link',d.status==='已连接'?C.green:C.muted,11),text(d.status,10,d.status==='已连接'?C.green:C.muted,'medium')],{gap:2}),
+   row([icon('link',d.status==='已连接'?C.green:C.muted,10),text(d.status,10,d.status==='已连接'?C.green:C.muted,'medium')],{gap:2,padding:[3,5],borderRadius:7,backgroundColor:d.status==='已连接'?'#EAF3ED':'#F2F2F4'}),
    space(),pair('wifi',d.clients===null?'--':fmt(d.clients)+'台',C.muted),
-   space(),row([icon('internaldrive',C.gold,11),text(usage?usage[1]:volume(d.today),13,C.gold,'semibold'),...(usage?[text(usage[2],10,C.muted)]:[])],{gap:2}),
+   space(),row([icon('internaldrive',C.gold,11),text(usage?usage[1]:volume(d.today),15,C.gold,'medium'),...(usage?[text(usage[2],10,C.muted)]:[])],{gap:2}),
    space(),pair('clock',duration(d.connected),C.muted)
- ],{gap:3});
+ ],{gap:2});
  const line4=row([
-   icon('arrow.down',C.muted,9),text(d.dl===null?'--':fmt(d.dl)+' Mbps',10,C.ink),
-   icon('arrow.up',C.muted,9),text(d.ul===null?'--':fmt(d.ul)+' Mbps',10,C.ink),
-   space(),text('QCI '+(d.qci===null?'--':fmt(d.qci)),10,C.muted),space(),text(t,9,C.muted),refresh
- ],{gap:3});
- return {type:'widget',backgroundColor:C.white,padding:[11,12,11,12],gap:7,refreshAfter:new Date(Date.now()+interval*1000).toISOString(),children:[line1,line2,line3,rule(),line4]};
+   row([icon('arrow.down',C.muted,10),text(d.dl===null?'--':fmt(d.dl)+' Mbps',10,C.ink)],{gap:2}),
+   space(),row([icon('arrow.up',C.muted,10),text(d.ul===null?'--':fmt(d.ul)+' Mbps',10,C.ink)],{gap:2}),
+   space(),text('QCI '+(d.qci===null?'--':fmt(d.qci)),10,C.muted),
+   space(),row([text(t,10,C.muted),refresh],{gap:4})
+ ],{gap:2});
+ return {type:'widget',backgroundColor:C.white,padding:[10,12,10,12],gap:5,refreshAfter:new Date(Date.now()+interval*1000).toISOString(),children:[line1,line2,line3,rule(),line4]};
 }
 export default async function(ctx){
  const env=ctx.env||{},base='http://192.168.0.1:2333',password=String(env.UFI_PASSWORD||''),auth=hex(sha256(bytes(password)));
