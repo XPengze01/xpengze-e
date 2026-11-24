@@ -1,4 +1,4 @@
-// UFI Collector 0.2 — Egern generic script, read-only, no widget layout.
+// UFI Collector 0.3 — Egern generic script, read-only, no widget layout.
 // UFI-TOOLS API v4.1.3; target U30 Air v4.1.6 (device verification pending).
 const bytes = s => Array.from(encodeURIComponent(s).replace(/%([0-9A-F]{2})/g,(_,x)=>String.fromCharCode(parseInt(x,16))),c=>c.charCodeAt(0));
 const hex = a => a.map(x=>x.toString(16).padStart(2,'0')).join('');
@@ -15,7 +15,7 @@ const mk=Array.from({length:64},(_,i)=>Math.floor(Math.abs(Math.sin(i+1))*429496
 function md5(a){const b=padded(a,true),h=[0x67452301,0xefcdab89,0x98badcfe,0x10325476];const s=[[7,12,17,22],[5,9,14,20],[4,11,16,23],[6,10,15,21]];for(let j=0;j<b.length;j+=64){const m=Array.from({length:16},(_,i)=>word(b,j+4*i,true));let [a,c,d,e]=h;for(let i=0;i<64;i++){let f,g,r=i>>>4;if(r===0){f=(c&d)|(~c&e);g=i}else if(r===1){f=(e&c)|(~e&d);g=(5*i+1)%16}else if(r===2){f=c^d^e;g=(3*i+5)%16}else{f=d^(c|~e);g=(7*i)%16}let next=(c+rol((a+f+mk[i]+m[g])|0,s[r][i%4]))|0;[a,c,d,e]=[e,next,c,d]}[a,c,d,e].forEach((x,i)=>h[i]=(h[i]+x)|0)}return output(h,true)}
 function hmacMD5(key,msg){let k=key.length>64?md5(key):key.slice();while(k.length<64)k.push(0);return md5(k.map(x=>x^92).concat(md5(k.map(x=>x^54).concat(msg))))}
 function signature(path,t){let m=hmacMD5(bytes('minikano_kOyXz0Ciz4V7wR0IeKmJFYFQ20jd'),bytes('minikanoGET'+path+t));return hex(sha256(sha256(m.slice(0,8)).concat(sha256(m.slice(8)))))}
-function safe(v){if(Array.isArray(v))return v.map(safe);if(v&&typeof v==='object'){const out={};for(const [k,x] of Object.entries(v)){if(/password|passwd|token|authorization|cookie|imei|imsi|iccid|msisdn|phone|mac_address|client_ip|wan_ip|device_id|uuid|serial|hostname|(^|_)mac($|_)|(^|_)ssid($|_)|cell_?id|(^|_)tac($|_)|(^|_)lac($|_)|neighbor_cell|locked_cell|network_information/i.test(k)&&k!=='need_token'){out[k]='[redacted]';continue}out[k]=safe(x)}return out}if(typeof v==='string'){if(/^\s*[\[{]/.test(v)){try{return JSON.stringify(safe(JSON.parse(v)))}catch{}}return v.replace(/(?:[0-9a-f]{2}:){5}[0-9a-f]{2}/gi,'[MAC redacted]').replace(/\b\d{14,22}\b/g,'[identifier redacted]')}return v}
+function safe(v){if(Array.isArray(v))return v.map(safe);if(v&&typeof v==='object'){const out={};for(const [k,x] of Object.entries(v)){if(/password|passwd|token|authorization|cookie|imei|imsi|iccid|msisdn|phone|mac_address|client_ip|wan_ip|ip_address|ipv4_address|ipv6_address|device_id|secret|credential|username|private_key|wifi_key|sim_pin|sim_puk|gps|latitude|longitude|uuid|serial|hostname|(^|_)mac($|_)|(^|_)ssid($|_)|cell_?id|(^|_)tac($|_)|(^|_)lac($|_)|neighbor_cell|locked_cell|network_information/i.test(k)&&k!=='need_token'){out[k]='[redacted]';continue}out[k]=safe(x)}return out}if(typeof v==='string'){if(/^\s*[\[{]/.test(v)){try{return JSON.stringify(safe(JSON.parse(v)))}catch{}}return v.replace(/(?:[0-9a-f]{2}:){5}[0-9a-f]{2}/gi,'[MAC redacted]').replace(/\b\d{14,22}\b/g,'[identifier redacted]')}return v}
 const groups={
  radio:'network_type,network_provider,ppp_status,network_signalbar,network_rssi,rssi,Z5g_rsrp,lte_rsrp,Lte_ca_status,dual_sim_support,sim_slot',
  battery:'battery_charging,battery_value,battery_vol_percent,usb_port_switch',
@@ -27,7 +27,7 @@ const groups={
  experimental:'Z5g_sinr,Z5g_rsrq,lte_snr,lte_rsrq,lte_sinr,lte_pci,nr_pci,Z5g_pci,Z5g_band,lte_band,nr_band,nr_arfcn,lte_earfcn,cell_id,network_information'
 };
 export default async function(ctx){
- const report={collector:'0.2',time:new Date().toISOString(),results:{},notes:[]};
+ const report={collector:'0.3',time:new Date().toISOString(),results:{},notes:[]};
  const base='http://192.168.0.1:2333';
  const password=ctx.env?.UFI_PASSWORD||'';
  const auth=hex(sha256(bytes(password)));
@@ -51,9 +51,9 @@ export default async function(ctx){
    log('UFI notes '+JSON.stringify(report.notes));
    try{ctx.storage.setJSON('ufi_collector_latest',report)}catch(e){log('storage '+errText(e))}
    const lines=Object.entries(report.results).map(([k,r])=>k+': '+(r.ok?'OK':(r.status?'HTTP '+r.status:r.stage||'failed'))+(r.error?' '+r.error:''));
-   const summary='UFI 0.2 | '+count+'/'+Object.keys(report.results).length+'\n'+lines.slice(0,5).join('\n')+'\n'+report.notes.join('\n');
-   try{ctx.notify({title:'UFI Collector 0.2',body:summary,sound:false,action:{type:'clipboard',text:JSON.stringify(report,null,2)}})}catch(e){log('notification '+errText(e))}
-   return {type:'widget',children:[{type:'text',text:summary}]};
+   const summary='UFI 0.3 | '+count+'/'+Object.keys(report.results).length+'\n'+lines.slice(0,5).join('\n')+'\n'+report.notes.join('\n');
+   try{ctx.notify({title:'UFI Collector 0.3',body:summary,sound:false,action:{type:'clipboard',text:JSON.stringify(report,null,2)}})}catch(e){log('notification '+errText(e))}
+   return {type:'widget',children:[{type:'text',text:summary+'\n\n'+JSON.stringify(report,null,2)}]};
  };
  const cryptoOK=hex(sha256(bytes('abc')))==='ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'&&hex(md5(bytes('abc')))==='900150983cd24fb0d6963f7d28e17f72'&&hex(hmacMD5(bytes('key'),bytes('The quick brown fox jumps over the lazy dog')))==='80070713463e7749b90c2dc24911e275';
  record('crypto_selftest',{ok:cryptoOK});
