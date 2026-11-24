@@ -1,4 +1,4 @@
-// UFI Collector 0.1 — Egern generic script, read-only, no widget layout.
+// UFI Collector 0.2 — Egern generic script, read-only, no widget layout.
 // UFI-TOOLS API v4.1.3; target U30 Air v4.1.6 (device verification pending).
 const bytes = s => Array.from(encodeURIComponent(s).replace(/%([0-9A-F]{2})/g,(_,x)=>String.fromCharCode(parseInt(x,16))),c=>c.charCodeAt(0));
 const hex = a => a.map(x=>x.toString(16).padStart(2,'0')).join('');
@@ -27,12 +27,37 @@ const groups={
  experimental:'Z5g_sinr,Z5g_rsrq,lte_snr,lte_rsrq,lte_sinr,lte_pci,nr_pci,Z5g_pci,Z5g_band,lte_band,nr_band,nr_arfcn,lte_earfcn,cell_id,network_information'
 };
 export default async function(ctx){
- const report={collector:'0.1',time:new Date().toISOString(),results:{},notes:[]};
+ const report={collector:'0.2',time:new Date().toISOString(),results:{},notes:[]};
  const base='http://192.168.0.1:2333';
- const password=ctx.env?.UFI_PASSWORD||'';const auth=hex(sha256(bytes(password)));
- async function get(path,query='',extra={},signed=true){const t=String(Date.now());let headers={Accept:'application/json',...extra};if(signed)headers={...headers,'kano-t':t,'kano-sign':signature(path,t),authorization:auth};try{const resp=await ctx.http.get(base+path+(query?'?'+query:''),{headers,timeout:4500,policy:'DIRECT',redirect:'error',credentials:'omit'});if(resp.status!==200)return {status:resp.status,ok:false};const data=await resp.json();return {status:200,ok:!!data&&typeof data==='object'&&!data.error,data}}catch{return {ok:false,error:'request or JSON parse failed'}}}
- const record=(name,r)=>{report.results[name]=safe(r);};
- const complete=()=>{ctx.storage.setJSON('ufi_collector_latest',report);for(const [name,value] of Object.entries(report.results))console.log('UFI '+name+' '+JSON.stringify(value));console.log('UFI notes '+JSON.stringify(report.notes));const count=Object.values(report.results).filter(r=>r.ok).length;ctx.notify({title:'UFI 数据采集',body:count+'/'+Object.keys(report.results).length+' 组接口返回正常，请查看脚本日志。',sound:false});return {type:'widget',children:[{type:'text',text:'采集结束：'+count+'/'+Object.keys(report.results).length+' 组，请查看日志'}]};};
+ const password=ctx.env?.UFI_PASSWORD||'';
+ const auth=hex(sha256(bytes(password)));
+ report.passwordConfigured=!!password;
+ const errText=e=>{let t=String(e?.message||e||'unknown error');for(const x of [password,auth])if(x)t=t.split(x).join('[redacted]');return t.replace(/[a-f0-9]{32,}/gi,'[redacted]').slice(0,220)};
+ const log=(s)=>{try{if(typeof console!=='undefined'&&typeof console.log==='function')console.log(s)}catch{}};
+ async function get(path,query='',extra={},signed=true){
+   let resp;try{
+     const t=String(Date.now());const headers={Accept:'application/json',...extra};
+     if(signed)Object.assign(headers,{'kano-t':t,'kano-sign':signature(path,t),authorization:auth});
+     resp=await ctx.http.get(base+path+(query?'?'+query:''),{headers,timeout:7000,policy:'DIRECT',redirect:'error',credentials:'omit'});
+   }catch(e){return {ok:false,stage:'http_request',error:errText(e)}}
+   const status=Number(resp.status);
+   if(status!==200)return {status,ok:false,stage:'http_status'};
+   try{const data=JSON.parse(await resp.text());return {status,ok:!!data&&typeof data==='object'&&!data.error,data};}
+   catch(e){return {status,ok:false,stage:'json_parse',error:errText(e)}}
+ }
+ const record=(name,r)=>{report.results[name]=safe(r);log('UFI '+name+' '+JSON.stringify(report.results[name]));};
+ const complete=()=>{
+   const count=Object.values(report.results).filter(r=>r.ok).length;
+   log('UFI notes '+JSON.stringify(report.notes));
+   try{ctx.storage.setJSON('ufi_collector_latest',report)}catch(e){log('storage '+errText(e))}
+   const lines=Object.entries(report.results).map(([k,r])=>k+': '+(r.ok?'OK':(r.status?'HTTP '+r.status:r.stage||'failed'))+(r.error?' '+r.error:''));
+   const summary='UFI 0.2 | '+count+'/'+Object.keys(report.results).length+'\n'+lines.slice(0,5).join('\n')+'\n'+report.notes.join('\n');
+   try{ctx.notify({title:'UFI Collector 0.2',body:summary,sound:false,action:{type:'clipboard',text:JSON.stringify(report,null,2)}})}catch(e){log('notification '+errText(e))}
+   return {type:'widget',children:[{type:'text',text:summary}]};
+ };
+ const cryptoOK=hex(sha256(bytes('abc')))==='ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'&&hex(md5(bytes('abc')))==='900150983cd24fb0d6963f7d28e17f72'&&hex(hmacMD5(bytes('key'),bytes('The quick brown fox jumps over the lazy dog')))==='80070713463e7749b90c2dc24911e275';
+ record('crypto_selftest',{ok:cryptoOK});
+ if(!cryptoOK){report.notes.push('签名算法自检失败');return complete()}
  const v=await get('/api/version_info','',{},false);record('version',v);const n=await get('/api/need_token','',{},false);record('auth_required',n);
  if(!v.ok||!n.ok){report.notes.push('无法确认局域网设备或鉴权状态');return complete()}
  if(n.data.need_token&&!password){report.notes.push('需要填写 UFI_PASSWORD');return complete()}
