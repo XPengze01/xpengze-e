@@ -1,4 +1,4 @@
-// U30 Air Widget 1.3 — Egern medium, fixed white, read-only.
+// U30 Air Widget 1.4 — Egern medium, fixed white, read-only.
 const bytes = s => Array.from(encodeURIComponent(s).replace(/%([0-9A-F]{2})/g,(_,x)=>String.fromCharCode(parseInt(x,16))),c=>c.charCodeAt(0));
 const hex = a => a.map(x=>x.toString(16).padStart(2,'0')).join('');
 const rol=(x,n)=>(x<<n)|(x>>>(32-n));
@@ -15,7 +15,7 @@ function md5(a){const b=padded(a,true),h=[0x67452301,0xefcdab89,0x98badcfe,0x103
 function hmacMD5(key,msg){let k=key.length>64?md5(key):key.slice();while(k.length<64)k.push(0);return md5(k.map(x=>x^92).concat(md5(k.map(x=>x^54).concat(msg))))}
 function signature(path,t,method='GET'){let m=hmacMD5(bytes('minikano_kOyXz0Ciz4V7wR0IeKmJFYFQ20jd'),bytes('minikano'+method+path+t));return hex(sha256(sha256(m.slice(0,8)).concat(sha256(m.slice(8)))))}
 
-const C={ink:'#202124',muted:'#8B8B90',blue:'#A6833C',green:'#4C8E64',orange:'#A6833C',red:'#C94B4B',line:'#ECECEF',white:'#FFFFFF',gold:'#A6833C'};
+const C={ink:'#202124',muted:'#8B8B90',blue:'#A6833C',green:'#4C8E64',orange:'#B45D20',red:'#C94B4B',line:'#ECECEF',white:'#FFFFFF',gold:'#A6833C'};
 const num=x=>x!==null&&x!==undefined&&x!==''&&Number.isFinite(Number(x))?Number(x):null;
 const fmt=(x,d=0)=>x===null?'--':Number(x).toFixed(d);
 const text=(v,size=11,color=C.ink,weight='regular',extra={})=>({type:'text',text:String(v??'--'),font:{size,weight},textColor:color,maxLines:1,minScale:0.72,...extra});
@@ -33,7 +33,7 @@ function signal(n){
  return svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 17'>"+marks+"</svg>",19,15);
 }
 function battery(n,charging){
- const pct=n===null?0:Math.max(0,Math.min(100,n)),color=n===null?C.muted:pct<=20?C.red:C.gold;
+ const pct=n===null?0:Math.max(0,Math.min(100,n)),color=n===null?C.muted:charging?C.green:C.ink;
  const bolt=charging?"<path d='M15 2L9 10H14L12 16L20 7H15Z' fill='#FFFFFF' stroke='"+color+"' stroke-width='0.35'/>":"";
  return svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 18'><rect x='1' y='2' width='27' height='14' rx='3' fill='none' stroke='"+color+"' stroke-width='1.5'/><rect x='29' y='6' width='2' height='6' rx='1' fill='"+color+"'/><rect x='3' y='4' width='"+(23*pct/100)+"' height='10' rx='1.5' fill='"+color+"'/>"+bolt+"</svg>",26,15);
 }
@@ -50,13 +50,14 @@ const localTime=d=>[d.getHours(),d.getMinutes(),d.getSeconds()].map(n=>String(n)
 // White compact native dashboard: typography is the hierarchy, not extra decoration.
 const metric=(label,v)=>col([text(label,10,C.muted,'medium'),text(v,20,C.ink,'medium',{textAlign:'center'})],{flex:1,gap:2});
 function speedLine(symbol,value){
+ const color=value==='--'?C.muted:symbol==='arrow.down'?C.green:C.orange;
  const m=String(value).match(/^(.+?)\s+(\S+)$/);
- return row([icon(symbol,C.muted,12),text(m?m[1]:value,18,C.ink,'medium'),...(m?[text(m[2],10,C.muted,'regular')]:[])],{gap:3,alignItems:'end'});
+ return row([icon(symbol,color,12),text(m?m[1]:value,18,color,'medium'),...(m?[text(m[2],10,color,'regular')]:[])],{gap:3,alignItems:'end'});
 }
 function layout(d,interval,refreshURL){
  const t=d.updated?localTime(new Date(d.updated)):'--:--:--';
  const refresh=icon('arrow.clockwise',C.muted,12,refreshURL?{url:refreshURL}:{});
- const bcolor=d.battery!==null&&d.battery<=20?C.red:C.ink;
+ const bcolor=d.battery===null?C.muted:d.charging?C.green:C.ink;
  const line1=row([
    row([signal(d.bars),text(d.provider,14,C.ink,'semibold'),text(d.mode,11,C.muted,'medium'),text(d.band,11,C.muted,'medium')],{gap:4}),
    space(),
@@ -71,7 +72,7 @@ function layout(d,interval,refreshURL){
  const line3=row([
    row([icon('link',d.status==='已连接'?C.green:C.muted,10),text(d.status,10,d.status==='已连接'?C.green:C.muted,'medium')],{gap:2,padding:[3,5],borderRadius:7,backgroundColor:d.status==='已连接'?'#EAF3ED':'#F2F2F4'}),
    space(),pair('wifi',d.clients===null?'--':fmt(d.clients)+'台',C.muted),
-   space(),row([icon('internaldrive',C.gold,11),text(usage?usage[1]:volume(d.today),15,C.gold,'medium'),...(usage?[text(usage[2],10,C.muted)]:[])],{gap:2}),
+   space(),row([icon('internaldrive',C.ink,11),text(usage?usage[1]:volume(d.today),15,C.ink,'medium'),...(usage?[text(usage[2],10,C.ink)]:[])],{gap:2}),
    space(),pair('clock',duration(d.connected),C.muted)
  ],{gap:2});
  const line4=row([
