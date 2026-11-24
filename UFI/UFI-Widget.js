@@ -1,4 +1,4 @@
-// U30 Air Widget 1.0 — Egern medium, fixed white, read-only.
+// U30 Air Widget 1.1 — Egern medium, fixed white, read-only.
 const bytes = s => Array.from(encodeURIComponent(s).replace(/%([0-9A-F]{2})/g,(_,x)=>String.fromCharCode(parseInt(x,16))),c=>c.charCodeAt(0));
 const hex = a => a.map(x=>x.toString(16).padStart(2,'0')).join('');
 const rol=(x,n)=>(x<<n)|(x>>>(32-n));
@@ -15,10 +15,10 @@ function md5(a){const b=padded(a,true),h=[0x67452301,0xefcdab89,0x98badcfe,0x103
 function hmacMD5(key,msg){let k=key.length>64?md5(key):key.slice();while(k.length<64)k.push(0);return md5(k.map(x=>x^92).concat(md5(k.map(x=>x^54).concat(msg))))}
 function signature(path,t,method='GET'){let m=hmacMD5(bytes('minikano_kOyXz0Ciz4V7wR0IeKmJFYFQ20jd'),bytes('minikano'+method+path+t));return hex(sha256(sha256(m.slice(0,8)).concat(sha256(m.slice(8)))))}
 
-const C={ink:'#202124',muted:'#727782',blue:'#087AC8',green:'#168747',orange:'#C77920',red:'#D14343',line:'#E8EAED',white:'#FFFFFF'};
+const C={ink:'#202124',muted:'#8B8B90',blue:'#A6833C',green:'#4C8E64',orange:'#A6833C',red:'#C94B4B',line:'#ECECEF',white:'#FFFFFF',gold:'#A6833C'};
 const num=x=>x!==null&&x!==undefined&&x!==''&&Number.isFinite(Number(x))?Number(x):null;
 const fmt=(x,d=0)=>x===null?'--':Number(x).toFixed(d);
-const text=(v,size=11,color=C.ink,weight='medium',extra={})=>({type:'text',text:String(v??'--'),font:{size,weight},textColor:color,maxLines:1,minScale:0.72,...extra});
+const text=(v,size=11,color=C.ink,weight='regular',extra={})=>({type:'text',text:String(v??'--'),font:{size,weight},textColor:color,maxLines:1,minScale:0.72,...extra});
 const stack=(direction,children,extra={})=>({type:'stack',direction,alignItems:'center',gap:3,children,...extra});
 const row=(children,extra={})=>stack('row',children,extra);
 const col=(children,extra={})=>stack('column',children,extra);
@@ -33,7 +33,7 @@ function signal(n){
  return svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 17'>"+marks+"</svg>",19,15);
 }
 function battery(n,charging){
- const pct=n===null?0:Math.max(0,Math.min(100,n)),color=n===null?C.muted:pct<=20?C.red:C.green;
+ const pct=n===null?0:Math.max(0,Math.min(100,n)),color=n===null?C.muted:pct<=20?C.red:C.gold;
  const bolt=charging?"<path d='M15 2L9 10H14L12 16L20 7H15Z' fill='#FFFFFF' stroke='"+color+"' stroke-width='0.35'/>":"";
  return svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 18'><rect x='1' y='2' width='27' height='14' rx='3' fill='none' stroke='"+color+"' stroke-width='1.5'/><rect x='29' y='6' width='2' height='6' rx='1' fill='"+color+"'/><rect x='3' y='4' width='"+(23*pct/100)+"' height='10' rx='1.5' fill='"+color+"'/>"+bolt+"</svg>",26,15);
 }
@@ -47,15 +47,37 @@ function volume(v){
 function rate(v,unit){const n=num(v);return n===null||n<0?'--':volume(unit==='bit'?n/8:n)+'/s'}
 function duration(v){const n=num(v);if(n===null||n<0)return '--';const s=Math.floor(n);return [Math.floor(s/3600),Math.floor(s/60)%60,s%60].map(n=>String(n).padStart(2,'0')).join(':')}
 const localTime=d=>[d.getHours(),d.getMinutes(),d.getSeconds()].map(n=>String(n).padStart(2,'0')).join(':');
-const metric=(label,v,unit)=>col([text(label,9,C.muted,'regular'),text(v,13,C.ink,'semibold'),text(unit||' ',8,C.muted,'regular')],{flex:1,gap:1});
+const metric=(label,v)=>col([text(label,9,C.muted,'regular'),text(v,15,C.ink,'medium')],{flex:1,gap:2});
+function speedLine(symbol,value){
+ const m=String(value).match(/^(.+?)\s+(\S+)$/);
+ return row([icon(symbol,C.muted,11),text(m?m[1]:value,15,C.ink,'medium'),...(m?[text(m[2],9,C.muted)]:[])],{gap:2});
+}
 function layout(d,interval,refreshURL){
  const t=d.updated?localTime(new Date(d.updated)):'--:--:--';
- const refresh=icon('arrow.clockwise',C.blue,12,refreshURL?{url:refreshURL}:{});
- const line1=row([signal(d.bars),text(d.provider,13,C.ink,'semibold',{flex:1}),text(d.band,12,C.blue,'semibold'),text(d.mode,12,C.ink,'semibold'),space(),icon('thermometer',C.orange,11),text(d.board===null?'--':fmt(d.board,1)+'°C',10),battery(d.battery,d.charging),text(d.battery===null?'--':fmt(d.battery)+'%',12,d.battery!==null&&d.battery<=20?C.red:C.green,'semibold')],{gap:3});
- const line2=row([col([row([icon('arrow.up',C.blue,12),text(d.up,12,C.blue,'semibold')],{gap:2}),row([icon('arrow.down',C.green,12),text(d.down,12,C.green,'semibold')],{gap:2})],{flex:2,alignItems:'start',gap:4}),metric('RSRP',fmt(d.rsrp),'dBm'),metric('RSRQ',fmt(d.rsrq),'dB'),metric('SINR',fmt(d.snr),'dB'),metric('PCI',fmt(d.pci),'')],{gap:3});
- const line3=row([pair('link',d.status,d.status==='已连接'?C.green:C.muted,{flex:1}),pair('wifi',d.clients===null?'--':fmt(d.clients)+'台'),pair('internaldrive',volume(d.today),C.blue,{flex:1.1}),pair('clock',duration(d.connected),C.muted,{flex:1.05})],{gap:4});
- const line4=row([row([text('AMBR',8,C.muted,'regular'),icon('arrow.down',C.green,10),text(d.dl===null?'--':fmt(d.dl)+' Mbps',10)],{gap:1}),row([icon('arrow.up',C.blue,10),text(d.ul===null?'--':fmt(d.ul)+' Mbps',10)],{gap:1}),text('QCI '+(d.qci===null?'--':fmt(d.qci)),10),space(),text(t,9,C.muted,'regular'),refresh],{gap:3});
- return {type:'widget',backgroundColor:C.white,padding:[10,11,10,11],gap:5,refreshAfter:new Date(Date.now()+interval*1000).toISOString(),children:[line1,rule(),line2,rule(),line3,rule(),line4]};
+ const refresh=icon('arrow.clockwise',C.muted,12,refreshURL?{url:refreshURL}:{});
+ const bcolor=d.battery!==null&&d.battery<=20?C.red:C.ink;
+ const line1=row([
+   signal(d.bars),text(d.provider,14,C.ink,'semibold'),text(d.mode,11,C.muted,'medium'),text(d.band,11,C.muted,'medium'),space(),
+   icon('thermometer',C.muted,10),text(d.board===null?'--':fmt(d.board,1)+'°C',10,C.muted),
+   battery(d.battery,d.charging),text(d.battery===null?'--':fmt(d.battery)+'%',13,bcolor,'medium')
+ ],{gap:3});
+ const line2=row([
+   col([speedLine('arrow.up',d.up),speedLine('arrow.down',d.down)],{flex:2.3,alignItems:'start',gap:3}),
+   metric('RSRP',fmt(d.rsrp)),metric('RSRQ',fmt(d.rsrq)),metric('SINR',fmt(d.snr)),metric('PCI',fmt(d.pci))
+ ],{gap:4});
+ const usage=volume(d.today).match(/^(.+?)\s+(\S+)$/);
+ const line3=row([
+   row([icon('link',d.status==='已连接'?C.green:C.muted,11),text(d.status,10,d.status==='已连接'?C.green:C.muted,'medium')],{gap:2}),
+   space(),pair('wifi',d.clients===null?'--':fmt(d.clients)+'台',C.muted),
+   space(),row([icon('internaldrive',C.gold,11),text(usage?usage[1]:volume(d.today),13,C.gold,'semibold'),...(usage?[text(usage[2],10,C.muted)]:[])],{gap:2}),
+   space(),pair('clock',duration(d.connected),C.muted)
+ ],{gap:3});
+ const line4=row([
+   text('AMBR',9,C.muted),icon('arrow.down',C.muted,9),text(d.dl===null?'--':fmt(d.dl)+' Mbps',10,C.ink),
+   icon('arrow.up',C.muted,9),text(d.ul===null?'--':fmt(d.ul)+' Mbps',10,C.ink),
+   space(),text('QCI '+(d.qci===null?'--':fmt(d.qci)),10,C.muted),space(),text(t,9,C.muted),refresh
+ ],{gap:3});
+ return {type:'widget',backgroundColor:C.white,padding:[11,12,11,12],gap:7,refreshAfter:new Date(Date.now()+interval*1000).toISOString(),children:[line1,line2,line3,rule(),line4]};
 }
 export default async function(ctx){
  const env=ctx.env||{},base='http://192.168.0.1:2333',password=String(env.UFI_PASSWORD||''),auth=hex(sha256(bytes(password)));
