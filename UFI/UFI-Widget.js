@@ -1,4 +1,4 @@
-// U30 Air Widget 1.1 — Egern medium, fixed white, read-only.
+// U30 Air Widget 1.2 — Egern medium, fixed white, read-only.
 const bytes = s => Array.from(encodeURIComponent(s).replace(/%([0-9A-F]{2})/g,(_,x)=>String.fromCharCode(parseInt(x,16))),c=>c.charCodeAt(0));
 const hex = a => a.map(x=>x.toString(16).padStart(2,'0')).join('');
 const rol=(x,n)=>(x<<n)|(x>>>(32-n));
@@ -73,7 +73,7 @@ function layout(d,interval,refreshURL){
    space(),pair('clock',duration(d.connected),C.muted)
  ],{gap:3});
  const line4=row([
-   text('AMBR',9,C.muted),icon('arrow.down',C.muted,9),text(d.dl===null?'--':fmt(d.dl)+' Mbps',10,C.ink),
+   icon('arrow.down',C.muted,9),text(d.dl===null?'--':fmt(d.dl)+' Mbps',10,C.ink),
    icon('arrow.up',C.muted,9),text(d.ul===null?'--':fmt(d.ul)+' Mbps',10,C.ink),
    space(),text('QCI '+(d.qci===null?'--':fmt(d.qci)),10,C.muted),space(),text(t,9,C.muted),refresh
  ],{gap:3});
