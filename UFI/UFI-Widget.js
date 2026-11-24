@@ -1,4 +1,4 @@
-// U30 Air Widget 1.4 — Egern medium, fixed white, read-only.
+// U30 Air Widget 1.5 — Egern medium, fixed white, read-only.
 const bytes = s => Array.from(encodeURIComponent(s).replace(/%([0-9A-F]{2})/g,(_,x)=>String.fromCharCode(parseInt(x,16))),c=>c.charCodeAt(0));
 const hex = a => a.map(x=>x.toString(16).padStart(2,'0')).join('');
 const rol=(x,n)=>(x<<n)|(x>>>(32-n));
@@ -15,7 +15,7 @@ function md5(a){const b=padded(a,true),h=[0x67452301,0xefcdab89,0x98badcfe,0x103
 function hmacMD5(key,msg){let k=key.length>64?md5(key):key.slice();while(k.length<64)k.push(0);return md5(k.map(x=>x^92).concat(md5(k.map(x=>x^54).concat(msg))))}
 function signature(path,t,method='GET'){let m=hmacMD5(bytes('minikano_kOyXz0Ciz4V7wR0IeKmJFYFQ20jd'),bytes('minikano'+method+path+t));return hex(sha256(sha256(m.slice(0,8)).concat(sha256(m.slice(8)))))}
 
-const C={ink:'#202124',muted:'#8B8B90',blue:'#A6833C',green:'#4C8E64',orange:'#B45D20',red:'#C94B4B',line:'#ECECEF',white:'#FFFFFF',gold:'#A6833C'};
+const C={ink:'#202124',muted:'#8B8B90',blue:'#A6833C',green:'#4C8E64',orange:'#B45D20',red:'#C94B4B',amber:'#C98A1B',line:'#ECECEF',white:'#FFFFFF',gold:'#A6833C'};
 const num=x=>x!==null&&x!==undefined&&x!==''&&Number.isFinite(Number(x))?Number(x):null;
 const fmt=(x,d=0)=>x===null?'--':Number(x).toFixed(d);
 const text=(v,size=11,color=C.ink,weight='regular',extra={})=>({type:'text',text:String(v??'--'),font:{size,weight},textColor:color,maxLines:1,minScale:0.72,...extra});
@@ -27,13 +27,16 @@ const space=()=>({type:'spacer'});
 const rule=()=>({type:'stack',direction:'row',children:[{type:'spacer'}],height:1,backgroundColor:C.line});
 const pair=(name,value,color=C.blue,extra={})=>row([icon(name,color,11),text(value,11,C.ink)],{gap:2,...extra});
 const svg=(mark,w,h)=>({type:'image',src:'data:image/svg+xml,'+mark,width:w,height:h});
-function signal(n){
+// Signal quality color: good / fair / poor. null means no data.
+const lv=(v,good,fair)=>v===null?C.muted:v>=good?C.green:v>=fair?C.amber:C.red;
+const batColor=(n,charging)=>n===null?C.muted:charging?C.green:n<20?C.red:C.ink;
+function signal(n,color=C.green){
  const count=n===null?0:Math.max(0,Math.min(5,Math.round(n)));
- const marks=[4,7,10,13,16].map((h,i)=>"<rect x='"+(i*4.5)+"' y='"+(17-h)+"' width='3.3' height='"+h+"' rx='1' fill='"+(i<count?C.green:'#D9DDE2')+"'/>").join('');
+ const marks=[4,7,10,13,16].map((h,i)=>"<rect x='"+(i*4.5)+"' y='"+(17-h)+"' width='3.3' height='"+h+"' rx='1' fill='"+(i<count?color:'#D9DDE2')+"'/>").join('');
  return svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 17'>"+marks+"</svg>",19,15);
 }
 function battery(n,charging){
- const pct=n===null?0:Math.max(0,Math.min(100,n)),color=n===null?C.muted:charging?C.green:C.ink;
+ const pct=n===null?0:Math.max(0,Math.min(100,n)),color=batColor(n,charging);
  const bolt=charging?"<path d='M15 2L9 10H14L12 16L20 7H15Z' fill='#FFFFFF' stroke='"+color+"' stroke-width='0.35'/>":"";
  return svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 18'><rect x='1' y='2' width='27' height='14' rx='3' fill='none' stroke='"+color+"' stroke-width='1.5'/><rect x='29' y='6' width='2' height='6' rx='1' fill='"+color+"'/><rect x='3' y='4' width='"+(23*pct/100)+"' height='10' rx='1.5' fill='"+color+"'/>"+bolt+"</svg>",26,15);
 }
@@ -47,41 +50,37 @@ function volume(v){
 function rate(v,unit){const n=num(v);return n===null||n<0?'--':volume(unit==='bit'?n/8:n)+'/s'}
 function duration(v){const n=num(v);if(n===null||n<0)return '--';const s=Math.floor(n);return [Math.floor(s/3600),Math.floor(s/60)%60,s%60].map(n=>String(n).padStart(2,'0')).join(':')}
 const localTime=d=>[d.getHours(),d.getMinutes(),d.getSeconds()].map(n=>String(n).padStart(2,'0')).join(':');
-// White compact native dashboard: typography is the hierarchy, not extra decoration.
-const metric=(label,v)=>col([text(label,10,C.muted,'medium'),text(v,20,C.ink,'medium',{textAlign:'center'})],{flex:1,gap:2});
-function speedLine(symbol,value){
- const color=value==='--'?C.muted:symbol==='arrow.down'?C.green:C.orange;
+// White compact native dashboard: download leads, signal metrics are color-coded, secondary info sits at the bottom.
+const metric=(label,v,color=C.ink)=>col([text(label,10,C.muted,'medium'),text(v,20,color,'medium',{textAlign:'center'})],{flex:1,gap:2});
+function speedLine(symbol,value,size){
+ const idle=value==='--'||/^0\s*B\/s$/.test(String(value));
+ const color=idle?C.muted:symbol==='arrow.down'?C.green:C.orange;
  const m=String(value).match(/^(.+?)\s+(\S+)$/);
- return row([icon(symbol,color,12),text(m?m[1]:value,18,color,'medium'),...(m?[text(m[2],10,color,'regular')]:[])],{gap:3,alignItems:'end'});
+ return row([icon(symbol,color,size>16?12:10),text(m?m[1]:value,size,color,'medium'),...(m?[text(m[2],10,color,'regular')]:[])],{gap:3,alignItems:'end'});
 }
 function layout(d,interval,refreshURL){
  const t=d.updated?localTime(new Date(d.updated)):'--:--:--';
- const refresh=icon('arrow.clockwise',C.muted,12,refreshURL?{url:refreshURL}:{});
- const bcolor=d.battery===null?C.muted:d.charging?C.green:C.ink;
+ const refresh=icon('arrow.clockwise',C.muted,11,refreshURL?{url:refreshURL}:{});
+ const abnormal=d.status!=='已连接'&&d.status!=='--';
+ const warn=abnormal?[row([text(d.status,10,C.red,'medium')],{padding:[3,6],borderRadius:7,backgroundColor:'#FBECEC'})]:[];
  const line1=row([
-   row([signal(d.bars),text(d.provider,14,C.ink,'semibold'),text(d.mode,11,C.muted,'medium'),text(d.band,11,C.muted,'medium')],{gap:4}),
-   space(),
-   row([icon('thermometer',C.muted,10),text(d.board===null?'--':fmt(d.board,1)+'°C',11,C.muted)],{gap:2}),
-   row([battery(d.battery,d.charging),text(d.battery===null?'--':fmt(d.battery)+'%',14,bcolor,'medium')],{gap:2})
- ],{gap:4});
+   row([signal(d.bars,d.rsrp===null?C.green:lv(d.rsrp,-90,-105)),text(d.provider,14,C.ink,'semibold'),text(d.mode,11,C.muted,'medium'),text(d.band,11,C.muted,'medium')],{gap:4}),
+   space(),...warn,
+   row([icon('thermometer',C.muted,10),text(d.board===null?'--':fmt(d.board,1)+'°C',11,d.board!==null&&d.board>=45?C.red:C.muted)],{gap:2}),
+   row([battery(d.battery,d.charging),text(d.battery===null?'--':fmt(d.battery)+'%',14,batColor(d.battery,d.charging),'medium')],{gap:2})
+ ],{gap:6});
  const line2=row([
-   col([speedLine('arrow.up',d.up),speedLine('arrow.down',d.down)],{flex:2.55,alignItems:'start',gap:0}),
-   row([metric('RSRP',fmt(d.rsrp)),metric('RSRQ',fmt(d.rsrq)),metric('SINR',fmt(d.snr)),metric('PCI',fmt(d.pci))],{flex:4,gap:2})
- ],{gap:5});
- const usage=volume(d.today).match(/^(.+?)\s+(\S+)$/);
+   col([speedLine('arrow.down',d.down,22),speedLine('arrow.up',d.up,14)],{flex:5,alignItems:'start',gap:1}),
+   row([metric('RSRP',fmt(d.rsrp),lv(d.rsrp,-90,-105)),metric('RSRQ',fmt(d.rsrq),lv(d.rsrq,-12,-17)),metric('SINR',fmt(d.snr),lv(d.snr,10,0))],{flex:7,gap:2})
+ ],{gap:8});
  const line3=row([
-   row([icon('link',d.status==='已连接'?C.green:C.muted,10),text(d.status,10,d.status==='已连接'?C.green:C.muted,'medium')],{gap:2,padding:[3,5],borderRadius:7,backgroundColor:d.status==='已连接'?'#EAF3ED':'#F2F2F4'}),
-   space(),pair('wifi',d.clients===null?'--':fmt(d.clients)+'台',C.muted),
-   space(),row([icon('internaldrive',C.ink,11),text(usage?usage[1]:volume(d.today),15,C.ink,'medium'),...(usage?[text(usage[2],10,C.ink)]:[])],{gap:2}),
-   space(),pair('clock',duration(d.connected),C.muted)
+   pair('wifi',d.clients===null?'--':fmt(d.clients)+'台',C.muted),
+   space(),pair('internaldrive',volume(d.today),C.muted),
+   space(),pair('clock',duration(d.connected),C.muted),
+   space(),row([text(t,11,C.muted),refresh],{gap:4})
  ],{gap:2});
- const line4=row([
-   row([icon('arrow.down',C.muted,10),text(d.dl===null?'--':fmt(d.dl)+' Mbps',10,C.ink)],{gap:2}),
-   space(),row([icon('arrow.up',C.muted,10),text(d.ul===null?'--':fmt(d.ul)+' Mbps',10,C.ink)],{gap:2}),
-   space(),text('QCI '+(d.qci===null?'--':fmt(d.qci)),10,C.muted),
-   space(),row([text(t,10,C.muted),refresh],{gap:4})
- ],{gap:2});
- return {type:'widget',backgroundColor:C.white,padding:[10,12,10,12],gap:5,refreshAfter:new Date(Date.now()+interval*1000).toISOString(),children:[line1,line2,line3,rule(),line4]};
+ const line4=text('PCI '+fmt(d.pci)+' · QCI '+fmt(d.qci)+' · 协商 ↓'+(d.dl===null?'--':fmt(d.dl))+' ↑'+(d.ul===null?'--':fmt(d.ul))+' Mbps',10,C.muted);
+ return {type:'widget',backgroundColor:C.white,padding:[12,14,12,14],gap:7,refreshAfter:new Date(Date.now()+interval*1000).toISOString(),children:[line1,line2,rule(),line3,line4]};
 }
 export default async function(ctx){
  const env=ctx.env||{},base='http://192.168.0.1:2333',password=String(env.UFI_PASSWORD||''),auth=hex(sha256(bytes(password)));
