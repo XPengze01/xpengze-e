@@ -1,0 +1,12 @@
+name: 'UFI Collector 0.1 | 数据采集测试'
+description: '只读采集 U30 Air / UFI-TOOLS 状态，暂不创建小组件。'
+icon: 'wifi'
+env_schema:
+  UFI_PASSWORD:
+    name: 'UFI 后台登录口令'
+    description: '仅在本机填写，不要上传或分享。'
+scriptings:
+  - generic:
+      name: 'UFI-Collector'
+      script_url: 'https://raw.githubusercontent.com/XPengze01/xpengze-e/refs/heads/main/UFI/UFI-Collector.js'
+      timeout: 90
