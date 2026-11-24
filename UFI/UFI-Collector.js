@@ -1,4 +1,4 @@
-// UFI Collector 0.4 — Egern generic script, read-only, no widget layout.
+// UFI Collector 0.5 — Egern generic script, read-only, no widget layout.
 // UFI-TOOLS API v4.1.3; target U30 Air v4.1.6 (device verification pending).
 const bytes = s => Array.from(encodeURIComponent(s).replace(/%([0-9A-F]{2})/g,(_,x)=>String.fromCharCode(parseInt(x,16))),c=>c.charCodeAt(0));
 const hex = a => a.map(x=>x.toString(16).padStart(2,'0')).join('');
@@ -27,7 +27,7 @@ const groups={
  experimental:'Z5g_sinr,Z5g_rsrq,lte_snr,lte_rsrq,lte_sinr,lte_pci,nr_pci,Z5g_pci,Z5g_band,lte_band,nr_band,nr_arfcn,lte_earfcn,cell_id,network_information'
 };
 export default async function(ctx){
- const report={collector:'0.4',time:new Date().toISOString(),results:{},notes:[]};
+ const report={collector:'0.5',time:new Date().toISOString(),results:{},notes:[]};
  const base='http://192.168.0.1:2333';
  const password=ctx.env?.UFI_PASSWORD||'';
  const auth=hex(sha256(bytes(password)));
@@ -51,8 +51,8 @@ export default async function(ctx){
    log('UFI notes '+JSON.stringify(report.notes));
    try{ctx.storage.setJSON('ufi_collector_latest',report)}catch(e){log('storage '+errText(e))}
    const lines=Object.entries(report.results).map(([k,r])=>k+': '+(r.ok?'OK':(r.status?'HTTP '+r.status:r.stage||'failed'))+(r.error?' '+r.error:''));
-   const summary='UFI 0.4 | '+count+'/'+Object.keys(report.results).length+'\n'+lines.slice(0,5).join('\n')+'\n'+report.notes.join('\n');
-   try{ctx.notify({title:'UFI Collector 0.4',body:summary,sound:false,action:{type:'clipboard',text:JSON.stringify(report,null,2)}})}catch(e){log('notification '+errText(e))}
+   const summary='UFI 0.5 | '+count+'/'+Object.keys(report.results).length+'\n'+lines.slice(0,5).join('\n')+'\n'+report.notes.join('\n');
+   try{ctx.notify({title:'UFI Collector 0.5',body:summary,sound:false,action:{type:'clipboard',text:JSON.stringify(report,null,2)}})}catch(e){log('notification '+errText(e))}
    return {type:'widget',children:[{type:'text',text:summary+'\n\n'+JSON.stringify(report,null,2)}]};
  };
  const cryptoOK=hex(sha256(bytes('abc')))==='ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'&&hex(md5(bytes('abc')))==='900150983cd24fb0d6963f7d28e17f72'&&hex(hmacMD5(bytes('key'),bytes('The quick brown fox jumps over the lazy dog')))==='80070713463e7749b90c2dc24911e275';
@@ -69,7 +69,7 @@ export default async function(ctx){
  // Reuse the existing official web session ONLY in memory. Never log or store the cookie.
  const ck=await get('/api/get_cookie');let cookie=ck.ok&&typeof ck.data.cookie==='string'?ck.data.cookie:'';let extra=cookie?{'kano-cookie':cookie}:{};
  const go=(cmd)=>get('/api/goform/goform_get_cmd_process','isTest=false&multi_data=1&cmd='+encodeURIComponent(cmd)+'&_='+Date.now(),extra);
- const login=await go('loginfo');record('official_session',login);if(login.data?.loginfo!=='ok')report.notes.push('官方会话未确认；仍尝试公开状态字段。若缺失，请先在 UFI 后台进入中兴官方管理页面登录后再运行。');
+ const login=await go('loginfo');record('official_session',login);if(login.data?.loginfo!=='ok')report.notes.push('原厂会话未确认；继续使用已验证的 UFI 代理查询，无需重新登录 Safari。');
  // Probe network_information on its own, before other signal queries.
  // Some firmware returns a flat object rather than the requested command key.
  const present=x=>x!==undefined&&x!==null&&x!==''&&x!=='[redacted]'&&x!=='--';
@@ -122,33 +122,69 @@ export default async function(ctx){
  for(let i=0;i<probeEntries.length;i+=2)await Promise.all(probeEntries.slice(i,i+2).map(async ([name,cmd])=>{
     const r=await go(cmd);if(r.ok){const returned=Object.keys(r.data).filter(k=>cmd.split(',').includes(k));const data=Object.fromEntries(returned.map(k=>[k,r.data[k]]));const nonempty=returned.filter(k=>present(data[k]));Object.assign(deepData,Object.fromEntries(nonempty.map(k=>[k,data[k]])));record(name,{status:r.status,ok:nonempty.length>0,data,returned,nonempty,missing:cmd.split(',').filter(k=>!returned.includes(k))});}else record(name,r);
  }));
- // AT commands are a fixed read-only allowlist. Never execute user-provided commands.
- // Run modem commands serially; retain response shape but redact long IDs and quoted registration identifiers.
- const slotRaw=report.results.zte_radio?.data?.sim_slot;const slot=String(slotRaw)==='2'?1:0;
- const atCommands=[['at_nr_serving','AT+SPENGMD=0,14,1'],['at_lte_serving','AT+SPENGMD=0,6,0'],['at_operator','AT+COPS?'],['at_nr_registration','AT+C5GREG?'],['at_lte_registration','AT+CEREG?'],['at_extended_quality','AT+CESQ'],['at_basic_quality','AT+CSQ']];
- for(const [name,command] of atCommands){
-   const r=await get('/api/AT','command='+encodeURIComponent(command)+'&slot='+slot);
-   if(r.ok){
-     const raw=typeof r.data.result==='string'?r.data.result:'';
-     const cleaned=raw.replace(/"([0-9a-f]{4,})"/gi,'"[id redacted]"').replace(/\b(?:0x[0-9a-f]{5,}|[0-9a-f]{8,})\b/gi,'[id redacted]').replace(/\b\d{7,}\b/g,'[long number redacted]');
-     record(name,{status:r.status,ok:!!raw&&!/\bERROR\b/i.test(raw)&&/\+[\w]+:/.test(raw),data:{command,slot,result:cleaned.slice(0,4500)}});
-   }else record(name,{status:r.status,ok:false,stage:r.stage,error:r.error,command,slot});
-   if(r.stage==='http_request'){report.notes.push('AT 查询出现网络异常，停止后续 AT 请求以免重复占用基带');break}
+ // Collect only explicitly allowed WiFi fields; never retain hotspot password, SSID or QR data.
+ const apKeys=/^(?:AuthMode|EncrypType|ApMaxStationNumber|ApBroadcastDisabled|ApIsolate|ChipIndex|AccessPointIndex|ChipEnum|SwitchOption|Channel|CurrentChannel|WifiChannel|Bandwidth|ChannelWidth|WirelessMode|WiFiMode|Frequency|Band|GuestEnable|ApEnable|Enable)$/i;
+ function apExtract(input){
+   const fields={};
+   function walk(value,path='',depth=0){
+     if(depth>6||!value||typeof value!=='object')return;
+     for(const [key,x] of Object.entries(value)){
+       if(/pass|pwd|secret|token|cookie|key|ssid|mac|hostname|qr|ipaddr|username/i.test(key))continue;
+       const p=path+key;
+       if(apKeys.test(key)&&present(x)&&(['number','boolean'].includes(typeof x)||(typeof x==='string'&&x.length<=40)))fields[p]=x;
+       else if(x&&typeof x==='object')walk(x,p+'.',depth+1);
+       else if(typeof x==='string'&&/^\s*[\[{]/.test(x)){try{walk(JSON.parse(x),p+'.',depth+1)}catch{}}
+     }
+   }
+   walk(input);return fields;
  }
- record('supported_nr_bands',await get('/api/getSupportNrBandList','slot='+slot));
- if(slot===0){record('volte_slot2',await get('/api/volte_status','slot=1'));record('vonr_slot2',await get('/api/vonr_status','slot=1'))}
+ for(const cmd of ['queryWiFiModuleSwitch','queryAccessPointInfo']){
+   const r=await get('/api/goform/goform_get_cmd_process','isTest=false&cmd='+cmd+'&_='+Date.now(),extra);
+   const fields=r.ok?apExtract(r.data):{};
+   record('wifi_'+cmd,{status:r.status,ok:Object.keys(fields).length>0,data:fields,stage:r.stage,error:r.error});
+ }
+ // Both modem slots: standard read-only commands. Only retain structured numeric status, not registration IDs.
+ const specs=[['operator','AT+COPS?','COPS'],['nr_registration','AT+C5GREG?','C5GREG'],['lte_registration','AT+CEREG?','CEREG'],['extended_quality','AT+CESQ','CESQ'],['basic_quality','AT+CSQ','CSQ'],['qos','AT+CGEQOSRDP=1','CGEQOSRDP']];
+ const modem={};
+ for(const slot of [0,1]){
+   const out={};modem[slot]=out;
+   for(const [name,command,label] of specs){
+     const r=await get('/api/AT','command='+encodeURIComponent(command)+'&slot='+slot);
+     const raw=r.ok&&typeof r.data.result==='string'?r.data.result:'';
+     let data={slot,command};
+     const line=raw.match(new RegExp('\\+'+label+':\\s*([^\\r\\n]*?)(?:\\s+OK\\b|\\s+ERROR\\b|$)','i'));
+     if(line){
+       const parts=line[1].split(',').map(v=>v.trim());
+       const num=x=>/^-?\d{1,9}$/.test(x||'')?Number(x):null;
+       if(name==='operator'){data.selectionMode=num(parts[0]);data.format=num(parts[1]);data.accessTechnology=num(parts[3]);}
+       else if(name.endsWith('registration')){data.reportingMode=num(parts[0]);data.registrationStatus=num(parts[1]);data.accessTechnology=num(parts[4]);}
+       else if(name==='extended_quality'){data.values=parts.map(num);data.validMeasurement=data.values.some(v=>v!==null&&v!==99&&v!==255);}
+       else if(name==='basic_quality'){data.rssi=num(parts[0]);data.ber=num(parts[1]);data.validMeasurement=data.rssi!==null&&data.rssi>0&&data.rssi!==99;}
+       else {data.numericParameters=parts.map(num);data.parameterCount=parts.length;}
+     }
+     const usable=!!line&&!/\bERROR\b/i.test(raw)&&(name==='operator'?data.accessTechnology!==null:name.endsWith('registration')?[1,5].includes(data.registrationStatus):name.endsWith('quality')?data.validMeasurement:data.numericParameters?.some(x=>x!==null));
+     out[name]=data;
+     record('at_slot'+slot+'_'+name,{status:r.status,ok:!!usable,responded:!!line,data,stage:r.stage,error:r.error});
+     if(r.stage==='http_request')break;
+   }
+   record('supported_nr_bands_slot'+slot,await get('/api/getSupportNrBandList','slot='+slot));
+   if(slot===1){record('volte_slot2',await get('/api/volte_status','slot=1'));record('vonr_slot2',await get('/api/vonr_status','slot=1'))}
+ }
+ report.modemSlots=modem;
+ report.simSlotReported=report.results.zte_radio?.data?.sim_slot??null;
  // List candidates by exact source field. Do not infer SA from 5G, or active band from a lock list.
  const allRadio={...report.results.zte_radio?.data,...deepData};
+ const networkDetails=report.results.deep_network_single?.data||report.results.deep_network_multi?.data||report.results.deep_network_direct?.data||{};
  const pick=(patterns)=>Object.entries(allRadio).filter(([k,v])=>present(v)&&patterns.some(p=>p.test(k))).map(([field,value])=>({field,value}));
  report.priorityFields={
    activeBandCandidates:pick([/(?:^|\.)(?:Nr_bands|nr5g_action_band|network_ZCELLINFO_band|wan_active_band|lte_ca_pcell_band)$/i]),
-   modeCandidates:pick([/(?:^|\.)(?:network_type|network_mode|network_rat|network_type_ex|nr5g_mode|endc_status)$/i]),
+   modeCandidates:[...pick([/(?:^|\.)(?:network_type|network_mode|network_rat|network_type_ex|nr5g_mode|endc_status)$/i]),...(present(networkDetails.network_type)?[{field:'network_information.network_type',value:networkDetails.network_type}]:[])],
    sinrCandidates:pick([/(?:sinr|snr)$/i]),
    rsrqCandidates:pick([/rsrq$/i]),
    rsrpCandidates:pick([/rsrp$/i]),
    pciCandidates:pick([/pci$/i]),
-   channelCandidates:pick([/(?:arfcn|action_channel|active_channel)$/i])
+   channelCandidates:pick([/(?:arfcn|earfcn|_fcn|action_channel|active_channel)$/i])
  };
- report.notes.push('优先字段是原始候选值，SA/NSA及AT字段含义待真机结果确认；频段锁定列表不视为在用频段。AT 原始响应的长数字/注册标识已部分遮盖，分享前可再检查。');
+ report.notes.push('优先字段是原始候选值；组网模式需核对网络枚举与有效槽位注册状态。AT 仅保留数字状态字段，不输出原始注册标识。锁频列表不等于在用频段。');
  cookie='';extra={};return complete();
 }
