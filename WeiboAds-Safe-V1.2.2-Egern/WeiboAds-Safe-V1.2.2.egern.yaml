@@ -1,22 +1,34 @@
-# Native Egern module V1.2.3 (stable V1.2.2 subscription path). Strong feed ad filtering on by default.
-# IMPORTANT: disable V1.1, V1.2 and V1.2.1 when enabling this V1.2.2 module.
-# DISABLE the legacy fmz200 / WeiboEnhanced / other Weibo ad modules to avoid conflicts.
-name: 微博去广告 Safe V1.2.3 · 关注保护及通知广告补漏
-description: 首页和最新微博保留已关注博主推广，过滤未关注广告；补充通知流带 msg_card.ad_tag 的广告项；其他博主主页不改写，正常消息和发帖上传不受影响。
+# Native Egern module V1.2.5 (stable V1.2.2 subscription path).
+# Disable older Weibo modules to avoid overlapping response rewrites.
+name: 微博去广告 Safe V1.2.5 · 精准判定与防误杀
+description: 保留首页已关注作者推广；精准广告证据、组合卡片保护、通用接口场景判断、通知空标记保护；支持读取接口 POST；补充明确开屏广告域名，不拦截普通通知、搜索填词、他人主页。
 author: Custom conservative implementation; references fmz200 / ddgksf2013 / RuCu6 / zmqcherish
 homepage: https://github.com/XPengze01/xpengze-e
 icon: shield.checkered
+rules:
+- domain:
+    match: adstrategy.biz.weibo.com
+    policy: REJECT
+- domain:
+    match: preload-click.uve.weibo.com
+    policy: REJECT
+- domain:
+    match: preload-impression.uve.weibo.com
+    policy: REJECT
+url_rewrites:
+- match: ^https?://(?:m?api\.weibo\.(?:cn|com))/2/ad/preload(?:/?(?:\?|$))
+  location: http://reject-dict/
 scriptings:
 - http_response:
     name: 微博开屏广告
-    match: ^https?://(?:bootpreload\.uve\.weibo\.com/v[0-9]+/ad/preload|bootrealtime\.uve\.weibo\.com/v[0-9]+/ad/realtime|sdkapp\.uve\.weibo\.com/interface/sdk/sdkad\.php|wbapp\.uve\.weibo\.com/(?:wbapplua/wbpullad\.lua|preload/get_ad))(?:/?(?:\?|$))
+    match: ^https?://(?:(?:bootpreload\.uve|boot\.biz)\.weibo\.com/v[0-9]+/ad/preload|(?:bootrealtime\.uve|boot\.biz)\.weibo\.com/v[0-9]+/ad/realtime|sdkapp\.uve\.weibo\.com/interface/sdk/sdkad\.php|wbapp\.uve\.weibo\.com/(?:wbapplua/wbpullad\.lua|preload/get_ad))(?:/?(?:\?|$))
     script_url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/WeiboAds-Safe-V1.2.2-Egern/WeiboAds-Safe-V1.2.2.js
     update_interval: 3600
     timeout: 8
     body_required: true
     max_size: 8388608
 - http_response:
-    name: 微博首页与最新微博信息流广告（强化）
+    name: 微博首页与最新微博信息流广告（关注保护）
     match: ^https?://(?:m?api\.weibo\.(?:cn|com))/2/(?:statuses/(?:friends/(?:timeline|mix_timeline)|friends_timeline|unread_friends(?:_timeline|/timeline)|unread_hot_timeline|container_timeline(?:_hot|_unread|_topic|_topicpage)?|repost_timeline)|guest/container_timeline_hot|groups/timeline|cardlist|container/get_item)(?:/?(?:\?|$))
     script_url: https://raw.githubusercontent.com/XPengze01/xpengze-e/main/WeiboAds-Safe-V1.2.2-Egern/WeiboAds-Safe-V1.2.2.js
     update_interval: 3600
@@ -88,5 +100,6 @@ mitm:
     - mapi.weibo.com
     - bootpreload.uve.weibo.com
     - bootrealtime.uve.weibo.com
+    - boot.biz.weibo.com
     - sdkapp.uve.weibo.com
     - wbapp.uve.weibo.com

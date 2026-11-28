@@ -1,295 +1,211 @@
 /**
- * Weibo Ads Safe V1.2.3 — Egern native response-only script.
- * Inspired by publicly documented ad markers from fmz200, zmqcherish,
- * RuCu6 and ddgksf2013 WeiboEnhanced; independently implemented.
- *
- * Invariants:
- * 1) No HTTP request rewrite, no host-wide REJECT, no traffic replay.
- * 2) Publish/upload/draft/login/payment paths are not on the allowlist.
- * 3) Strong feed-only promotion filtering, ignoring null/false/0/empty values.
- * 4) JSON parse failures, non-2xx responses and exceptions pass through.
- * 5) Followed authors' sponsored posts stay visible in home timelines; unknown authors' ads are removed.
- *    Other users' profile timelines are untouched; own profile/comments use precise flags.
- * 6) All ad categories are on by default; no settings/environment controls.
- * 7) For messageflow and messageflow/notice, only remove msg_card.ad_tag, not normal messages.
+ * Weibo Ads Safe V1.2.5 — native Egern response filter.
+ * Based on online V1.2.3 and user-supplied V1.2.4. References: fmz200, zmqcherish, RuCu6, ddgksf2013.
+ * Explicit ad evidence; protect followed author post subtrees on home timelines.
+ * Unknown generic containers, account/publication endpoints, malformed/error responses pass through.
+ * No recursive blanket cleanup of user objects, normal detail recommendations or search hints.
  */
+const WEB_API_HOSTS=new Set(["api.weibo.cn","api.weibo.com","mapi.weibo.cn","mapi.weibo.com"]);
+const LIST_KEYS=new Set(["items","statuses","datas","cards","card_group","comments","comments_list","comment_list","commentList","list","resultList","feeds","feed","sections","contents","mblog_list","status_list","head_cards","top_cards","header_cards","channels","groups","reposts","hot_reposts","data"]);
+const NEST_KEYS=new Set(["data","result","payload","status","mblog","card","pageHeader","detailInfo","item","container","feed","comment","timeline","main","head","body","tab","content","dataInfo","channelInfo","header","insert_data"]);
+const EXPLICIT_AD_TYPES=new Set(["ad","ads","advertisement","commercial","sponsored","sponsor","feed_ad","native_ad","ad_card","promoted_ad","promoted_post"]);
+const STRONG_FEED_MODES=new Set(["feed","discovery","search","video"]);
+const HOME_TIMELINE_PATH=/^\/2\/(?:statuses\/(?:friends\/(?:timeline|mix_timeline)|friends_timeline|unread_friends(?:_timeline|\/timeline)|unread_hot_timeline|container_timeline(?:_hot|_unread)?)|groups\/timeline)\/?$/;
+const GENERIC=/^\/2\/(?:cardlist|container\/get_item|page|flowpage)\/?$/;
+const PROTECTED_PATH=/\/(?:statuses\/(?:update|upload|send|create|edit|destroy|share|repost|comment|publish)|(?:compose|composer|publisher|publish|draft|drafts|upload|uploads|media\/upload|photo\/upload|login|logout|account|oauth|payment|pay|order|verify|verification))(?:\/|$)/i;
+const ROUTES=[["feed",/^\/(?:statuses\/(?:friends\/(?:timeline|mix_timeline)|friends_timeline|unread_friends(?:_timeline|\/timeline)|unread_hot_timeline|container_timeline(?:_hot|_unread|_topic|_topicpage)?|repost_timeline)|guest\/container_timeline_hot|groups\/timeline)\/?$/],
+["comments",/^\/(?:comments\/(?:mix_comments|build_comments|hotflow)|statuses\/(?:container_detail_comment|container_detail_mix|container_detail_forward))\/?$/],
+["detail",/^\/statuses\/(?:container_detail|extend|show)\/?$/],
+["discovery",/^\/search\/(?:finder|container_timeline|container_discover)\/?$/],
+["search",/^\/searchall\/?$/],
+["video",/^\/(?:video\/(?:flow_stream|flow_stream_cache|tiny_stream_video_list|community_tab|full_screen_stream)|statuses\/video_mixtimeline)\/?$/],
+["profile",/^\/profile\/me\/?$/],
+["messages",/^\/messageflow(?:\/notice)?\/?$/]];
+const DEBUG=false;
 
-const WEB_API_HOSTS = new Set(['api.weibo.cn', 'api.weibo.com', 'mapi.weibo.cn', 'mapi.weibo.com']);
-const STRONG_FEED_MODES = new Set(['feed', 'discovery', 'search', 'video']);
-// Following exemption applies ONLY to home timelines, not search/discovery/profile.
-const HOME_TIMELINE_PATH = /^\/2\/(?:statuses\/(?:friends\/(?:timeline|mix_timeline)|friends_timeline|unread_friends(?:_timeline|\/timeline)|unread_hot_timeline|container_timeline(?:_hot|_unread)?)|groups\/timeline)\/?$/;
-const ROUTES = [
-  { type: 'feed', key: 'FEED', re: /^\/(?:statuses\/(?:friends\/(?:timeline|mix_timeline)|friends_timeline|unread_friends(?:_timeline|\/timeline)|unread_hot_timeline|container_timeline(?:_hot|_unread|_topic|_topicpage)?|repost_timeline)|guest\/container_timeline_hot|groups\/timeline|cardlist|container\/get_item)\/?$/ },
-  { type: 'comments', key: 'COMMENTS', re: /^\/(?:comments\/(?:mix_comments|build_comments|hotflow)|statuses\/(?:container_detail_comment|container_detail_mix|container_detail_forward))\/?$/ },
-  { type: 'detail', key: 'DETAIL', re: /^\/statuses\/(?:container_detail|extend|show)\/?$/ },
-  { type: 'discovery', key: 'DISCOVERY', re: /^\/search\/(?:finder|container_timeline|container_discover)\/?$/ },
-  { type: 'search', key: 'SEARCH', re: /^\/(?:searchall|flowpage|page)\/?$/ },
-  { type: 'video', key: 'VIDEO', re: /^\/(?:video\/(?:flow_stream|flow_stream_cache|tiny_stream_video_list|community_tab|full_screen_stream)|statuses\/video_mixtimeline)\/?$/ },
-  { type: 'profile', key: 'PROFILE', re: /^\/profile\/me\/?$/ },
-  { type: 'messages', key: 'MESSAGES', re: /^\/messageflow(?:\/notice)?\/?$/ }
-];
+function obj(v){return v!==null&&typeof v==='object'&&!Array.isArray(v);}
 
-// Deliberately redundant denylist: even if an allowlist is expanded later,
-// publication and account operations remain untouched.
-const PROTECTED_PATH = /\/(?:statuses\/(?:update|upload|send|create|edit|destroy|share|repost|comment|publish)|(?:compose|composer|publisher|publish|draft|drafts|upload|uploads|media\/upload|photo\/upload|login|logout|account|oauth|payment|pay|order|verify|verification))(?:\/|$)/i;
-const LIST_KEYS = new Set([
-  'items', 'statuses', 'datas', 'cards', 'card_group', 'comments',
-  'comments_list', 'comment_list', 'commentList', 'list', 'resultList',
-  'feeds', 'feed', 'sections', 'contents', 'mblog_list', 'status_list',
-  'head_cards', 'top_cards', 'header_cards', 'channels', 'groups',
-  'reposts', 'hot_reposts'
-]);
-const NEST_KEYS = new Set([
-  'data', 'result', 'payload', 'status', 'mblog', 'card', 'pageHeader',
-  'detailInfo', 'item', 'container', 'feed', 'comment', 'timeline', 'main',
-  'head', 'body', 'tab', 'content', 'dataInfo', 'channelInfo',
-  'payload', 'header', 'insert_data'
-]);
-const EXPLICIT_AD_TYPES = new Set([
-  'ad', 'ads', 'advertisement', 'commercial', 'sponsored', 'sponsor',
-  'feed_ad', 'native_ad', 'ad_card', 'promoted_ad', 'promoted_post'
-]);
+function flagged(v){return v===true||v===1||v==='1'||v==='true';}
 
-const obj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
-const flagged = v => v === true || v === 1 || v === '1' || v === 'true';
-const adType = v => typeof v === 'string' && EXPLICIT_AD_TYPES.has(v.toLowerCase());
-const adLabel = v => typeof v === 'string' && /^(?:广告|商业广告|广告微博|推广广告|广告推荐)$/u.test(v.trim());
+function adType(v){return typeof v==='string'&&EXPLICIT_AD_TYPES.has(v.trim().toLowerCase());}
 
-// Explicitly avoid treating empty marker placeholders as advertisements.
-function hasPromotionPayload(v) {
-  if (v === true || v === 1 || v === '1') return true;
-  if (!obj(v)) return false;
-  return Object.values(v).some(x => {
-    if (x == null || x === false || x === 0 || x === '') return false;
-    if (Array.isArray(x)) return x.length > 0;
-    if (obj(x)) return Object.keys(x).length > 0;
-    return true;
-  });
+function adLabel(v){return typeof v==='string'&&/^(?:广告|商业广告|广告微博|推广广告|广告推荐)$/u.test(v.trim());}
+
+function validMarker(v,depth=0){
+  if(depth>3||v==null||v===false)return false;
+  if(typeof v==='boolean')return v;
+  if(typeof v==='number')return Number.isFinite(v)&&v>0;
+  if(typeof v==='string')return !/^(?:|0|false|null|undefined)$/i.test(v.trim());
+  if(Array.isArray(v))return v.some(x=>validMarker(x,depth+1));
+  return obj(v)&&Object.values(v).some(x=>validMarker(x,depth+1));
 }
 
-// Inspect known wrappers only, never nested user profiles or quoted text.
-function adCandidates(item) {
-  if (!obj(item)) return [];
-  return [
-    item, item.data, item.status, item.mblog, item.card,
-    item.data?.mblog, item.data?.status, item.data?.card,
-    item.card?.mblog, item.card?.data, item.card?.data?.mblog
-  ].filter(obj);
+function adId(v){return (typeof v==='string'||typeof v==='number')&&validMarker(v);}
+
+function hasAdPromotion(v){
+  if(flagged(v))return true;
+  if(!obj(v))return false;
+  return ['is_ad','is_ads','isAd','isAds'].some(k=>flagged(v[k]))||
+    ['type','ad_type','promotion_type'].some(k=>adType(v[k]))||
+    ['adid','ad_id'].some(k=>adId(v[k]))||
+    (Array.isArray(v.monitor_url)&&v.monitor_url.some(x=>typeof x==='string'&&/^https?:\/\//i.test(x)))||
+    adLabel(v.mark)||adLabel(v.display_text);
 }
 
-// Preserve the entry if the post author is followed, not if any nested user is.
-function isFollowedAuthorPost(item) {
-  return adCandidates(item).some(data =>
-    obj(data.user) && flagged(data.user.following));
+function adCandidates(item){
+  if(!obj(item))return [];
+  return [item,item.data,item.status,item.mblog,item.card,item.data?.mblog,item.data?.status,item.data?.card,item.card?.mblog,item.card?.data,item.card?.data?.mblog,item.card?.data?.status].filter(obj);
 }
 
-function isClearlyAd(item) {
-  if (!obj(item)) return false;
-  // Only inspect the item and its immediate content wrappers. Never inspect
-  // embedded user profiles or arbitrary descendants for ad-looking strings.
-  for (const data of adCandidates(item)) {
-    if (!obj(data)) continue;
-    for (const name of ['is_ad', 'is_ads', 'isAd', 'isAds', 'isAliMaMaAD']) {
-      if (flagged(data[name])) return true;
-    }
-    if (data.ad_state === 1 || data.ad_state === '1') return true;
-    if (adLabel(data.mblogtypename) || adLabel(data.adType) || adLabel(data.commentAdType)) return true;
-    for (const name of ['category', 'model_type', 'card_type', 'cardType', 'bizType', 'ad_type']) {
-      if (adType(data[name])) return true;
-    }
-    if (obj(data.promotion) && (adType(data.promotion.type) || flagged(data.promotion.is_ad))) return true;
-    if (obj(data.ads_material_info) && (flagged(data.ads_material_info.is_ads) || flagged(data.ads_material_info.is_ad))) return true;
-    if (adLabel(data.content_auth_info?.content_auth_title)) return true;
-    // A known advertising position identifier; not a generic 'promote' string.
-    if (typeof data.itemid === 'string' && /(?:^|[&_:])is_ad_pos(?:[&_:]|$)/i.test(data.itemid)) return true;
+function looksLikePost(x){
+  return obj(x)&&(typeof x.text==='string'||typeof x.text_raw==='string'||x.mid!=null||x.mblogtype!=null||
+    (obj(x.user)&&(x.id!=null||x.idstr!=null||x.created_at!=null)));
+}
+
+function actualPost(item){
+  if(!obj(item))return null;
+  // Named post wrappers take priority over unrelated card users.
+  for(const x of [item.mblog,item.status,item.data?.mblog,item.data?.status,item.card?.mblog,item.card?.data?.mblog,item.card?.data?.status])
+    if(obj(x))return x;
+  for(const x of [item,item.data,item.card?.data,item.card])if(looksLikePost(x))return x;
+  return null;
+}
+
+function isFollowedAuthorPost(item){const post=actualPost(item);return !!(post&&obj(post.user)&&flagged(post.user.following));}
+
+function isCardContainer(item){
+  if(!obj(item))return false;
+  return [item,item.data,item.card,item.card?.data].some(x=>obj(x)&&Array.isArray(x.card_group));
+}
+
+function isClearlyAd(item,mode){
+  for(const d of adCandidates(item)){
+    if(STRONG_FEED_MODES.has(mode)&&(d.mblogtype===1||d.mblogtype==='1'))return true;
+    if(['is_ad','is_ads','isAd','isAds','isAliMaMaAD'].some(k=>flagged(d[k])))return true;
+    if(flagged(d.ad_state))return true;
+    if([d.mblogtypename,d.adType,d.commentAdType,d.content_auth_info?.content_auth_title].some(adLabel))return true;
+    if(['category','model_type','card_type','cardType','bizType','ad_type'].some(k=>adType(d[k])))return true;
+    if(hasAdPromotion(d.promotion)||hasAdPromotion(d.promotion_info))return true;
+    if(obj(d.ads_material_info)&&(flagged(d.ads_material_info.is_ads)||flagged(d.ads_material_info.is_ad)))return true;
+    if(typeof d.itemid==='string'&&/(?:^|[&_:])is_ad_pos(?:[&_:]|$)/i.test(d.itemid))return true;
   }
   return false;
 }
 
-/**
- * Stronger only on feed-like listing responses, never on post contents.
- * promotion_info may identify a recommendation rather than a paid ad.
- */
-function isStrongFeedAd(item) {
-  if (!obj(item)) return false;
-  for (const data of adCandidates(item)) {
-    if (hasPromotionPayload(data.promotion) ||
-        hasPromotionPayload(data.promotion_info)) return true;
-    if (typeof data.mblogtypename === 'string' &&
-        /(广告|热推)/u.test(data.mblogtypename)) return true;
-    if (typeof data.content_auth_info?.content_auth_title === 'string' &&
-        data.content_auth_info.content_auth_title.includes('广告')) return true;
-    if (typeof data.itemid === 'string' && data.itemid.includes('is_ad_pos')) return true;
-  }
-  return false;
+function queryPairs(query){
+  try{return query.split('&').filter(Boolean).map(s=>{const i=s.indexOf('=');return [decodeURIComponent(i<0?s:s.slice(0,i)).toLowerCase(),decodeURIComponent(i<0?'':s.slice(i+1)).replace(/\+/g,' ')];});}
+  catch(_){return null;}
 }
 
-function readRoute(rawUrl) {
-  let url;
-  try { url = new URL(rawUrl); } catch (_) { return null; }
-  const host = url.hostname.toLowerCase();
-  const path = url.pathname;
-  // The ad module must never participate in publication or account endpoints.
-  if (PROTECTED_PATH.test(path)) return null;
-  if (host === 'bootpreload.uve.weibo.com' && /^\/v\d+\/ad\/preload\/?$/.test(path)) {
-    return { type: 'splash', key: 'SPLASH', path, host };
-  }
-  if (host === 'bootrealtime.uve.weibo.com' && /^\/v\d+\/ad\/realtime\/?$/.test(path)) {
-    return { type: 'splash', key: 'SPLASH', path, host };
-  }
-  if (host === 'sdkapp.uve.weibo.com' && /^\/interface\/sdk\/sdkad\.php\/?$/.test(path)) {
-    return { type: 'splash', key: 'SPLASH', path, host };
-  }
-  if (host === 'wbapp.uve.weibo.com' && /^\/(?:wbapplua\/wbpullad\.lua|preload\/get_ad)\/?$/.test(path)) {
-    return { type: 'splash', key: 'SPLASH', path, host };
-  }
-  if (!WEB_API_HOSTS.has(host) || !path.startsWith('/2/')) return null;
-  const routePath = path.slice(2); // /2/statuses/... → /statuses/...
-  const route = ROUTES.find(entry => entry.re.test(routePath));
-  return route ? { type: route.type, key: route.key, path, host } : null;
+function genericScene(query){
+  const pairs=queryPairs(query);
+  if(!pairs)return false;
+  // Unknown/ambiguous generic routes pass through. No profile/UID containers.
+  if(pairs.some(([k,v])=>/^(?:uid|user_id|profile_uid|target_uid)$/.test(k)&&v!==''&&v!=='0'))return false;
+  const ids=pairs.filter(([k])=>/^(?:containerid|container_id|page_id)$/.test(k)).map(([,v])=>v);
+  return ids.length>0&&ids.every(v=>/^(?:100103(?:type=|$)|106003(?:type=|$))/.test(v));
 }
 
-function clearSplash(objValue) {
-  if (!obj(objValue)) return 0;
-  let changed = 0;
-  const arrays = ['ads', 'ad', 'ad_list', 'ads_list', 'ads_groups', 'bidding_ads', 'splash_ads', 'feed_ad_arr'];
-  for (const key of arrays) {
-    if (Array.isArray(objValue[key]) && objValue[key].length > 0) {
-      objValue[key] = [];
-      changed++;
-    }
-  }
-  if (obj(objValue.adMap) && Object.keys(objValue.adMap).length > 0) {
-    objValue.adMap = {};
-    changed++;
-  }
-  for (const key of ['cacheAdInfo', 'realTimeAd']) {
-    if (Object.prototype.hasOwnProperty.call(objValue, key) && objValue[key] !== null) {
-      objValue[key] = null;
-      changed++;
-    }
-  }
-  for (const key of ['show_push_splash_ad']) {
-    if (objValue[key] === true) { objValue[key] = false; changed++; }
-  }
-  return changed;
+function readRoute(rawUrl){
+  const m=/^https?:\/\/([a-z0-9.-]+)(?::(?:443|80))?(\/[^?#]*)(?:\?([^#]*))?(?:#.*)?$/i.exec(rawUrl);
+  if(!m)return null;
+  const host=m[1].toLowerCase(),path=m[2],query=m[3]||'';
+  if(PROTECTED_PATH.test(path))return null;
+  if((host==='bootpreload.uve.weibo.com'||host==='boot.biz.weibo.com')&&/^\/v\d+\/ad\/preload\/?$/.test(path))return {type:'splash',path};
+  if((host==='bootrealtime.uve.weibo.com'||host==='boot.biz.weibo.com')&&/^\/v\d+\/ad\/realtime\/?$/.test(path))return {type:'splash',path};
+  if(host==='sdkapp.uve.weibo.com'&&/^\/interface\/sdk\/sdkad\.php\/?$/.test(path))return {type:'splash',path};
+  if(host==='wbapp.uve.weibo.com'&&/^\/(?:wbapplua\/wbpullad\.lua|preload\/get_ad)\/?$/.test(path))return {type:'splash',path};
+  if(!WEB_API_HOSTS.has(host)||!path.startsWith('/2/'))return null;
+  if(GENERIC.test(path))return genericScene(query)?{type:'search',path}:null;
+  const route=ROUTES.find(([,re])=>re.test(path.slice(2)));
+  return route?{type:route[0],path}:null;
 }
 
-function cleanSplash(root) {
-  let changed = 0;
-  // Only known, splash-specific containers: no arbitrary traversal.
-  for (const part of [root, root.data, root.data?.data, root.cached_ad,
-    root.data?.cached_ad, root.data?.splash, root.data?.splash_ad]) {
-    changed += clearSplash(part);
+function clearSplash(x){
+  if(!obj(x))return 0;
+  let n=0;
+  for(const k of ['ads','ad','ad_list','ads_list','ads_groups','bidding_ads','splash_ads','feed_ad_arr']){
+    if(Array.isArray(x[k])&&x[k].length){x[k]=[];n++;}
   }
-  return changed;
+  if(obj(x.adMap)&&Object.keys(x.adMap).length){x.adMap={};n++;}
+  for(const k of ['cacheAdInfo','realTimeAd'])if(Object.prototype.hasOwnProperty.call(x,k)&&x[k]!==null){x[k]=null;n++;}
+  if(flagged(x.show_push_splash_ad)){x.show_push_splash_ad=false;n++;}
+  if(flagged(x.display_ad)){x.display_ad=0;n++;}
+  if(typeof x.background_delay_display_time==='number'&&x.background_delay_display_time<31536000){x.background_delay_display_time=31536000;n++;}
+  return n;
 }
 
-function cleanMessages(root) {
-  // fmz200/zmqcherish: a specific ad marker on a message card.
-  // Do not touch normal messages, chats, counts, account notifications or
-  // generic 'recommended' messages; neither filter the entire messageflow.
-  let removed = 0;
-  for (const owner of [root, root?.data]) {
-    if (!obj(owner) || !Array.isArray(owner.messages)) continue;
-    const original = owner.messages.length;
-    const kept = owner.messages.filter(message => {
-      const tag = message?.msg_card?.ad_tag;
-      // A nonempty ad_tag is a specific ad field, unlike vague names/text.
-      return tag === undefined || tag === null || tag === false || tag === '' || tag === 0;
-    });
-    removed += original - kept.length;
-    if (kept.length !== original) owner.messages = kept;
-  }
-  return removed;
+function cleanSplash(root){
+  let n=0;
+  for(const x of [root,root.data,root.data?.data,root.cached_ad,root.data?.cached_ad,root.data?.splash,root.data?.splash_ad])n+=clearSplash(x);
+  return n;
 }
 
-function cleanFeed(root, mode, path) {
-  const stats = { removed: 0, cleared: 0, visited: 0 };
-  const preserveFollowed = mode === 'feed' && HOME_TIMELINE_PATH.test(path);
-  const removeAd = item => {
-    if (preserveFollowed && isFollowedAuthorPost(item)) return false;
-    return isClearlyAd(item) ||
-      (STRONG_FEED_MODES.has(mode) && isStrongFeedAd(item));
-  };
-  const walk = (node, depth) => {
-    if (!obj(node) || depth > 7 || stats.visited > 9000) return;
-    stats.visited++;
-    for (const [key, val] of Object.entries(node)) {
-      if (Array.isArray(val) && LIST_KEYS.has(key)) {
-        // Only list items can be removed; never delete a normal user, thread or field.
-        const next = [];
-        for (const item of val) {
-          if (removeAd(item)) { stats.removed++; continue; }
-          if (obj(item)) walk(item, depth + 1);
-          next.push(item);
+function cleanMessages(root){
+  let n=0;
+  for(const x of [root,root.data]){
+    if(!obj(x)||!Array.isArray(x.messages))continue;
+    const next=x.messages.filter(m=>!validMarker(m?.msg_card?.ad_tag));
+    n+=x.messages.length-next.length;
+    if(next.length!==x.messages.length)x.messages=next;
+  }
+  return n;
+}
+
+function cleanFeed(root,mode,path){
+  const preserveFollowed=mode==='feed'&&HOME_TIMELINE_PATH.test(path);
+  let changes=0,visited=0;
+  function protectedPost(x){return preserveFollowed&&isFollowedAuthorPost(x);}
+  function walk(node,depth){
+    if(!obj(node)||depth>8||visited>=9000||protectedPost(node))return;
+    visited++;
+    for(const [key,value] of Object.entries(node)){
+      if(Array.isArray(value)&&LIST_KEYS.has(key)){
+        const kept=[];
+        for(const item of value){
+          if(protectedPost(item)){kept.push(item);continue;}
+          // Walk containers even with one child; never remove by parent marker alone.
+          if(!isCardContainer(item)&&isClearlyAd(item,mode)){changes++;continue;}
+          if(obj(item))walk(item,depth+1);
+          kept.push(item);
         }
-        if (next.length !== val.length) node[key] = next;
-      } else if (obj(val) && NEST_KEYS.has(key)) {
-        walk(val, depth + 1);
-      } else if (Array.isArray(val) && key === 'data') {
-        const next = [];
-        for (const item of val) {
-          if (removeAd(item)) { stats.removed++; continue; }
-          if (obj(item)) walk(item, depth + 1);
-          next.push(item);
-        }
-        if (next.length !== val.length) node[key] = next;
-      }
+        if(kept.length!==value.length)node[key]=kept;
+      }else if(obj(value)&&NEST_KEYS.has(key))walk(value,depth+1);
     }
-  };
-  if (Array.isArray(root.data)) {
-    const next = [];
-    for (const item of root.data) {
-      if (removeAd(item)) { stats.removed++; continue; }
-      if (obj(item)) walk(item, 1);
-      next.push(item);
-    }
-    if (next.length !== root.data.length) root.data = next;
   }
-  walk(root, 0);
-  // Only clear *explicitly named* ad collections in selected feed-like routes.
-  // Do not touch 'trends', 'recommend', 'user', 'publisher_list' or anything else.
-  if (['feed', 'discovery', 'search', 'video', 'profile', 'detail'].includes(mode)) {
-    for (const node of [root, root.data]) {
-      if (!obj(node)) continue;
-      for (const key of ['ad', 'ads', 'ad_list', 'ads_list', 'advertises', 'advertisements', 'feed_ad_arr']) {
-        if (Array.isArray(node[key]) && node[key].length > 0) {
-          node[key] = [];
-          stats.cleared++;
-        }
+  walk(root,0);
+  if(['feed','discovery','search','video','profile','detail'].includes(mode)){
+    for(const x of [root,root.data]){
+      if(!obj(x)||protectedPost(x))continue;
+      for(const k of ['ad','ads','ad_list','ads_list','advertises','advertisements','feed_ad_arr']){
+        if(!Array.isArray(x[k])||!x[k].length)continue;
+        const kept=preserveFollowed?x[k].filter(protectedPost):[];
+        if(kept.length!==x[k].length){changes++;x[k]=kept;}
       }
     }
   }
-  return stats.removed + stats.cleared;
+  return changes;
 }
 
-export default async function(ctx) {
-  const rawUrl = ctx?.request?.url;
-  if (typeof rawUrl !== 'string' || !ctx?.response) return;
-  const route = readRoute(rawUrl);
-  if (!route) return;
-  // Permit POST listing responses on explicit feed-like routes; never publish paths.
-  if (typeof ctx.request.method !== 'string') return;
-  const method = ctx.request.method.toUpperCase();
-  if (method !== 'GET' && !(method === 'POST' && STRONG_FEED_MODES.has(route.type))) return;
-  if (typeof ctx.response.status === 'number' && (ctx.response.status < 200 || ctx.response.status >= 300)) return;
-  // Fail closed to no modification; this never modifies requests.
+export default async function handle(ctx){
+  const rawUrl=ctx?.request?.url;
+  if(typeof rawUrl!=='string'||!ctx?.response)return;
+  const route=readRoute(rawUrl);
+  if(!route)return;
+  const method=typeof ctx.request.method==='string'?ctx.request.method.toUpperCase():'';
+  if(method!=='GET'&&method!=='POST')return;
+  if(typeof ctx.response.status==='number'&&(ctx.response.status<200||ctx.response.status>=300))return;
   let raw;
-  try { raw = await ctx.response.text(); } catch (_) { return; }
-  if (typeof raw !== 'string' || !raw.trim()) return { body: raw ?? '' };
-  try {
-    // sdkad.php has historically returned JSON + trailing OK.
-    const suffix = route.path.endsWith('sdkad.php') && /}\s*OK\s*$/.test(raw) ? 'OK' : '';
-    const jsonText = suffix ? raw.slice(0, raw.lastIndexOf('OK')).trimEnd() : raw;
-    const root = JSON.parse(jsonText);
-    if (!obj(root) || root.ok === 0 || root.success === false || root.error) return { body: raw };
-    const changes = route.type === 'splash' ? cleanSplash(root) :
-      route.type === 'messages' ? cleanMessages(root) : cleanFeed(root, route.type, route.path);
-    if (!changes) return { body: raw };
-    return { body: JSON.stringify(root) + suffix };
-  } catch (_) {
-    // Never produce '{}' on failure, never mask an upstream error.
-    return { body: raw };
-  }
+  try{raw=await ctx.response.text();}catch(_){return;}
+  if(typeof raw!=='string'||!raw.trim())return;
+  try{
+    const suffix=/sdkad\.php\/?$/.test(route.path)&&/}\s*OK\s*$/.test(raw)?'OK':'';
+    const jsonText=suffix?raw.slice(0,raw.lastIndexOf('OK')).trimEnd():raw;
+    const root=JSON.parse(jsonText);
+    if(!obj(root)||root.ok===0||root.ok==='0'||root.success===false||root.error||root.error_code)return {body:raw};
+    const n=route.type==='splash'?cleanSplash(root):route.type==='messages'?cleanMessages(root):cleanFeed(root,route.type,route.path);
+    if(!n)return {body:raw};
+    if(DEBUG)console.log('[Weibo Safe V1.2.5] '+route.type+' changes='+n);
+    return {body:JSON.stringify(root)+suffix};
+  }catch(_){return {body:raw};}
 }
